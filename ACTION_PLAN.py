@@ -24,7 +24,7 @@ def generate_pdf(riga, testo_completo):
     
     # Titolo del Documento
     pdf.set_font('Arial', 'B', 22)
-    pdf.set_text_color(0, 51, 153) # Blu Interreg
+    pdf.set_text_color(0, 51, 153)
     pdf.cell(0, 20, "ACTION PLAN IDROGENO", 0, 1, 'C')
     
     pdf.set_font('Arial', '', 16)
@@ -32,7 +32,7 @@ def generate_pdf(riga, testo_completo):
     pdf.cell(0, 10, f"Comune di {riga['NOME_COMUNE']}", 0, 1, 'C')
     pdf.ln(10)
 
-    # Pulizia caratteri per FPDF (Arial standard non supporta UTF-8 speciale)
+    # Pulizia caratteri per FPDF
     testo_pdf = (testo_completo
                  .replace('’', "'")
                  .replace('‘', "'")
@@ -44,8 +44,9 @@ def generate_pdf(riga, testo_completo):
     pdf.set_font('Arial', '', 11)
     pdf.multi_cell(0, 7, testo_pdf)
     
-    # Restituisce i bytes direttamente (fpdf2 output è già bytes)
-    return pdf.output()
+    # TRUCCO FINALE: Convertiamo il bytearray in bytes puri
+    return bytes(pdf.output())
+
 
 # --- 2. CONFIGURAZIONE INTERFACCIA STREAMLIT ---
 st.set_page_config(page_title="H2READY Action Plan", layout="wide")
@@ -138,14 +139,21 @@ Step prioritari: {roadmap}
             st.code(full_plan, language="text")
 
             # --- DOWNLOAD PDF ---
+            # --- E nel blocco del tasto di download ---
             if st.button("PREPARA PDF ISTITUZIONALE"):
-                pdf_output = generate_pdf(riga, full_plan)
-                st.download_button(
-                    label="⬇️ Scarica Action Plan (PDF)",
-                    data=pdf_output,
-                    file_name=f"H2READY_Plan_{riga['NOME_COMUNE']}.pdf",
-                    mime="application/pdf"
-                )
+                try:
+                    pdf_output = generate_pdf(riga, full_plan)
+                    
+                    # Ora pdf_output è un oggetto 'bytes' perfetto per Streamlit
+                    st.success("Documento pronto!")
+                    st.download_button(
+                        label="⬇️ Scarica Action Plan (PDF)",
+                        data=pdf_output,
+                        file_name=f"H2READY_Plan_{riga['NOME_COMUNE']}.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Errore durante la creazione del PDF: {e}")
 
         else:
             st.warning(f"Nessun dato trovato per l'ID: {id_ricercato}. Verifica nel Google Sheet.")
