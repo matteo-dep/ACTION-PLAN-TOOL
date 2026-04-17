@@ -11,6 +11,11 @@ st.title("📄 Generatore Automatico Action Plan H2READY")
 
 id_ricercato = st.text_input("Inserisci ID_ISTAT o Codice Univoco:")
 
+# Aggiungi ttl=0 per ignorare la vecchia cache d'errore
+try:
+    df = conn.read(ttl=0) 
+    # ... resto del codice
+
 if id_ricercato:
     try:
         # Leggiamo direttamente il CSV dal web
