@@ -80,3 +80,46 @@ Il Comune ha un punteggio di **{livello}/18**.
             
     except Exception as e:
         st.error(f"Errore durante la lettura: {e}")
+
+# --- AZIONE 3: BILANCIO E SINERGIE ---
+st.subheader("Bilancio Energetico e Sinergie")
+
+# Calcoli di sistema [cite: 246]
+fabbisogno_tot = float(riga['T21_FABBISOGNO_H2_TON_ANNO']) + float(riga['T22_FABBISOGNO_H2_TON_ANNO']) + float(riga['T23_FABBISOGNO_H2_TON_ANNO'])
+potenziale_prod = float(riga['T24_POTENZIALE_PRODUZIONE_H2_TON_ANNO'])
+bilancio = potenziale_prod - fabbisogno_tot
+
+md_sinergie = f"""
+## 3. QUANTIFICAZIONE E BILANCIO (AZIONE 3)
+* **Fabbisogno Totale Stimato:** {fabbisogno_tot:.1f} t/anno [cite: 18]
+* **Potenziale di Produzione Locale:** {potenziale_prod:.1f} t/anno [cite: 17]
+* **Bilancio Netto:** {bilancio:.1f} t/anno
+"""
+
+# Logica Sinergie per Profili Misti 
+profilo = str(riga['T12_PROFILO_STRATEGICO'])
+if profilo == "AB":
+    md_sinergie += "\n\n**Sinergia H2 Valley:** Il Comune può bilanciare domanda e offerta a KM zero. [cite: 84]"
+elif profilo == "AC":
+    md_sinergie += "\n\n**Sinergia Distretto Multimodale:** L'industria pesante fa da traino per la logistica. [cite: 88]"
+elif profilo == "BC":
+    md_sinergie += "\n\n**Sinergia Hub Mobilità:** La produzione è asservita ai corridoi TEN-T. [cite: 91]"
+
+# --- AZIONE 4: ROADMAP ---
+roadmap_testo = ""
+if livello <= 8:
+    roadmap_testo = "1. Formazione personale tecnico; 2. Scouting stakeholder locali; 3. Studio di prefattibilità. [cite: 27, 46]"
+elif 9 <= livello <= 14:
+    roadmap_testo = "1. Definizione Business Case; 2. Accordi di partenariato; 3. Individuazione aree di installazione. "
+else:
+    roadmap_testo = "1. Redazione progetto esecutivo; 2. Candidatura a bandi di finanziamento (PNRR/Interreg); 3. Avvio gara d'appalto. [cite: 54]"
+
+md_sinergie += f"""
+---
+## 4. PIANO D'AZIONE E ROADMAP (AZIONE 4)
+Sulla base della maturità di livello **{livello}**, si consigliano i seguenti step prioritari:
+* {roadmap_testo}
+"""
+
+st.markdown(md_sinergie)
+# Aggiorna il pulsante di download per includere tutto il md_plan + md_sinergie
