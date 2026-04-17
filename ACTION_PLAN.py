@@ -170,3 +170,15 @@ Sulla base della maturità di livello **{livello}**, si consigliano i seguenti s
 
 st.markdown(md_sinergie)
 # Aggiorna il pulsante di download per includere tutto il md_plan + md_sinergie
+
+# Sostituisci la parte finale del tuo script:
+if st.button("Genera Action Plan Istituzionale"):
+    pdf_bytes = generate_pdf(riga, md_plan) # Usa la funzione definita sopra
+    
+    st.success("PDF Generato con successo!")
+    st.download_button(
+        label="Scarica Action Plan (PDF)",
+        data=pdf_bytes,
+        file_name=f"H2READY_ActionPlan_{riga['NOME_COMUNE']}.pdf",
+        mime="application/pdf"
+    )
