@@ -15,13 +15,26 @@ st.markdown("Inserisci il codice identificativo del Comune per recuperare i dati
 # 1. Input dell'utente: Ricerca per ID_ISTAT
 id_ricercato = st.text_input("Inserisci ID_ISTAT o Codice Univoco (es. 030043):", help="Il sistema cercherà questo codice nella Colonna A del foglio")
 
+# Sostituisci l'URL qui sotto con il link del tuo foglio Google
+URL_FOGLIO = "https://docs.google.com/spreadsheets/d/15oHezgxy09dC-1WQn7vfStYq67DQo3R09pFLvWBoFSk/edit#gid=0"
+
 if id_ricercato:
     try:
+        # Leggiamo il foglio passando direttamente l'URL
+        df = conn.read(spreadsheet=URL_FOGLIO)
+        
+        # Pulizia nomi colonne
+        df.columns = df.columns.str.strip()
+        
+        # ... resto del codice ...
+
+#if id_ricercato:
+    #try:
         # Leggiamo tutto il foglio TOOLKIT_RESULTS_TOTAL
-        df = conn.read()
+        #df = conn.read()
         
         # Pulizia nomi colonne (rimuove spazi bianchi)
-        df.columns = df.columns.str.strip()
+        #df.columns = df.columns.str.strip()
 
         # 2. Ricerca della riga corrispondente all'ID
         # Cerchiamo il valore nella colonna ID_ISTAT (che partiva dalla cella A2)
