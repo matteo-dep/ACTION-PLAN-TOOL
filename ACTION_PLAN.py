@@ -1,5 +1,52 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
+from fpdf import FPDF
+
+class H2ReadyPDF(FPDF):
+    def header(self):
+        # Logo Interreg e H2READY [cite: 1, 2, 3]
+        # Nota: assicurati di avere il file 'logo_interreg.png' nella tua repo
+        # self.image('logo_interreg.png', 10, 8, 50) 
+        self.set_font('Arial', 'B', 8)
+        self.set_text_color(100)
+        self.cell(0, 5, 'H2READY - IL FUTURO A IDROGENO DELL\'AREA TRANSFRONTALIERA', 0, 1, 'R')
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Pagina {self.page_no()} - Progetto cofinanziato dall\'Unione europea', 0, 0, 'C')
+
+def generate_pdf(riga, md_content):
+    pdf = H2ReadyPDF()
+    pdf.add_page()
+    
+    # TITOLO PRINCIPALE
+    pdf.set_font('Arial', 'B', 22)
+    pdf.set_text_color(0, 51, 153) # Blu Interreg
+    pdf.cell(0, 20, f"ACTION PLAN IDROGENO", 0, 1, 'C')
+    pdf.set_font('Arial', '', 16)
+    pdf.cell(0, 10, f"Comune di {riga['NOME_COMUNE']}", 0, 1, 'C')
+    pdf.ln(10)
+
+    # DETTAGLIO AZIONI 
+    sections = [
+        ("AZIONE 1: PROFILO STRATEGICO", f"Livello: {riga['T11_LIVELLO_MATURITA']} - Profilo: {riga['T12_PROFILO_STRATEGICO']}"),
+        ("AZIONE 2: ANALISI TECNICA", "Dettaglio della domanda e dell'offerta territoriale."),
+        ("AZIONE 3: SINERGIE", "Quantificazione e bilancio energetico."),
+        ("AZIONE 4: ROADMAP", "Piano d'attuazione e prossimi step.")
+    ]
+
+    for title, desc in sections:
+        pdf.set_fill_color(230, 240, 255)
+        pdf.set_font('Arial', 'B', 12)
+        pdf.cell(0, 10, title, 0, 1, 'L', fill=True)
+        pdf.set_font('Arial', '', 10)
+        pdf.multi_cell(0, 8, desc)
+        pdf.ln(5)
+
+    return pdf.output(dest='S').encode('latin-1', errors='replace')
 
 # 1. Configurazione Pagina
 st.set_page_config(page_title="H2READY Action Plan", layout="wide")
