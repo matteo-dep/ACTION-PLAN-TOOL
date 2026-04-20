@@ -139,8 +139,8 @@ if id_ricercato:
                         with open(filename, "r", encoding="utf-8") as f: return f.read()
                     return ""
 
-        intro_md = get_md("1-intro_it.md")
-        struttura_md = get_md("2-struttura_plan_it.md")
+    intro_md = get_md("1-intro_it.md")
+    struttura_md = get_md("2-struttura_plan_it.md")
 
         # LOGICA DINAMICA MATURITÀ
 
