@@ -144,7 +144,7 @@ if id_ricercato:
 
         # LOGICA DINAMICA MATURITÀ
 
-            testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
+                testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
 
             if st.button("🚀 GENERA PDF"):
                 pdf_bytes = generate_pdf(riga, intro_md, testo_tecnico)
