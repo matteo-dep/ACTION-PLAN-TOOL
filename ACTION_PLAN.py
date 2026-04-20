@@ -66,14 +66,13 @@ def write_markdown_to_pdf(pdf, md_text):
             pdf.multi_cell(0, 7, clean_for_pdf(line))
             pdf.ln(2)
 
-def generate_pdf(riga, intro_text, tecnico_text):
+def generate_pdf(riga, intro_text, struttura_text, maturita_text, tecnico_text):
     pdf = H2ReadyPDF()
     
     # --- PAGINA 1: COPERTINA ---
     pdf.add_page()
     pdf.set_fill_color(0, 51, 153) 
     pdf.rect(0, 0, 10, 297, 'F') 
-    
     if os.path.exists("logo_h2ready.png"):
         pdf.image("logo_h2ready.png", x=75, y=30, w=60)
     
@@ -94,16 +93,21 @@ def generate_pdf(riga, intro_text, tecnico_text):
     pdf.cell(0, 10, "Documento Strategico di Transizione Energetica", 0, 1, 'C')
     pdf.cell(0, 10, "Progetto cofinanziato dall'Unione Europea", 0, 1, 'C')
 
-    # --- PAGINA 2: INTRODUZIONE (Parsata) ---
+    # --- PAGINA 2: INTRODUZIONE E STRUTTURA ---
     pdf.add_page()
-    # Invece di multi_cell, usiamo la nostra funzione parser
     write_markdown_to_pdf(pdf, intro_text)
+    pdf.add_page()
+    write_markdown_to_pdf(pdf, struttura_text)
 
-    # --- PAGINA 3: ANALISI TECNICA (Dal GSheet) ---
+    # --- PAGINA 3: ANALISI MATURITÀ (DINAMICA) ---
+    pdf.add_page()
+    write_markdown_to_pdf(pdf, maturita_text)
+
+    # --- PAGINA 4: ANALISI TECNICA ---
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "ANALISI DEL TERRITORIO", 0, 1, 'L')
+    pdf.cell(0, 10, "ANALISI TECNICA DEL TERRITORIO", 0, 1, 'L')
     pdf.ln(5)
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
@@ -127,14 +131,18 @@ if id_ricercato:
         res = df[df['ID_ISTAT'].astype(str).str.strip() == str(id_ricercato).strip()]
 
         if not res.empty:
-            riga = res.iloc[0]
-            st.success(f"Dati pronti per {riga['NOME_COMUNE']}")
+                riga = res.iloc[0]
+                
+                # Caricamento Blocchi Fissi
+                def get_md(filename):
+                    if os.path.exists(filename):
+                        with open(filename, "r", encoding="utf-8") as f: return f.read()
+                    return ""
 
-            intro_path = "1-intro_it.md"
-            intro_md = ""
-            if os.path.exists(intro_path):
-                with open(intro_path, "r", encoding="utf-8") as f:
-                    intro_md = f.read()
+        intro_md = get_md("1-intro_it.md")
+        struttura_md = get_md("2-struttura_plan_it.md")
+
+        # LOGICA DINAMICA MATURITÀ
 
             testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
 
