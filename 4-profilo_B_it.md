@@ -1,2 +1,3 @@
-# Profilo Strategico B: Hub di Produzione e Generazione Energetica
+RISULTATO: *Profilo Strategico B - Polo di Produzione*  
+
 L'analisi tecnica ha individuato nel territorio una forte vocazione alla produzione, definendo un profilo orientato all'offerta di idrogeno verde grazie alla presenza di elevati potenziali di energia rinnovabile o aree idonee all'installazione di elettrolizzatori. L'identificazione di questo profilo comporta l'attivazione del Percorso B, focalizzato sulla determinazione della capacità produttiva locale e sull'analisi dei costi di generazione (LCOH). Seguire questo percorso implica valutare la fattibilità tecnica delle infrastrutture di produzione e la loro integrazione con la rete elettrica, al fine di trasformare il Comune in un esportatore netto di energia pulita. La strategia si concentra sulla creazione di valore aggiunto attraverso lo sfruttamento delle risorse primarie locali per servire i mercati di sbocco regionali e transfrontalieri.
