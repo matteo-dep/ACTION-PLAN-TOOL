@@ -1,4 +1,4 @@
-# Introduzione: Il ruolo dell'Idrogeno nella Transizione Energetica
+# Il ruolo dell'Idrogeno nella Transizione Energetica
 
 L’idea di una “economia dell’idrogeno” circola da decenni, ma solo negli ultimi anni, spinta dall’urgenza della decarbonizzazione, si è tradotta in investimenti concreti su scala europea e locale. Spesso presentato come il pilastro indiscusso della transizione ecologica, l'idrogeno richiede una collocazione nel giusto contesto strategico, agendo come uno strumento potenzialmente utile che si affianca alle basi della decarbonizzazione senza sostituirle. Questo Action Plan, sviluppato nell'ambito del progetto **H2READY**, mira a definire ambiti d'impiego efficienti che rispettino le leggi della termodinamica e il principio di realtà, fornendo alle amministrazioni una bussola per distinguere tra potenzialità effettive e ambiti d'uso meno sostenibili.
 
@@ -8,3 +8,4 @@ L'efficienza del sistema complessivo è condizionata dal secondo principio della
 
 Il futuro energetico del territorio dipenderà dalla capacità delle amministrazioni di collocare ogni tecnologia nel posto giusto, considerando l'idrogeno come un tassello specifico di un mosaico ampio e complesso. Questo Action Plan nasce per analizzare con precisione la maturità del tessuto locale, mappare le reali necessità industriali e definire percorsi d'attuazione concreti. Attraverso il toolkit H2READY, il Comune può trasformare gli obiettivi climatici in opportunità di sviluppo e resilienza, basando le proprie scelte su dati tecnici solidi e su una visione di sistema integrata.
 
+# Potenzialità e visione in termini nazionali e regionali
