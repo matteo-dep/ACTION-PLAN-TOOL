@@ -114,34 +114,26 @@ def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, pro
 
     # --- PASSO 1: MATURITA E PROFILO IDENTIFICATO ---
     add_step_page(pdf, "PASSO 1: Determinazione del livello di maturità del comune e Profilo Identificato")
+    
     pdf.add_page()
+    # 1. Testo Intro Maturità
     write_markdown_to_pdf(pdf, mat_intro)
     pdf.ln(5)
+    # 2. Testo Maturità Specifica (L1, L2 o L3)
     write_markdown_to_pdf(pdf, mat_dettaglio)
-    
-    # NOVITÀ: Stampa esplicita del Profilo alla fine del Passo 1
-    pdf.ln(10)
-    pdf.set_font('Arial', 'B', 16)
-    pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, f"PROFILO STRATEGICO ASSEGNATO: {str(riga['T12_PROFILO_STRATEGICO']).strip().upper()}", 0, 1, 'L')
-    pdf.set_font('Arial', '', 11)
-    pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 7, clean_for_pdf("A valle dell'analisi dei dati territoriali e della compilazione dei moduli tecnici, il Toolkit ha assegnato questa identità strategica al Comune. Le implicazioni e i percorsi conseguenti sono dettagliati nel Passo successivo."))
-
-    # --- PASSO 2: RISULTATO DEI PERCORSI ---
-    add_step_page(pdf, "PASSO 2: Risultato dei percorsi identificati")
-    pdf.add_page()
+    pdf.ln(8)
+    # 3. Testo Intro Profilo
     write_markdown_to_pdf(pdf, profilo_intro)
     pdf.ln(5)
+    # 4. Testo Profilo Specifico (A, B, C, AB, ecc.)
     write_markdown_to_pdf(pdf, profilo_dettaglio)
 
-    pdf.ln(10)
-    pdf.set_font('Arial', 'B', 14)
-    pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "Risultati dell'Analisi Tecnica", 0, 1, 'L')
-    pdf.set_font('Arial', '', 11)
-    pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 7, clean_for_pdf(tecnico_text))
+    # --- PASSO 2: RISULTATO DEI PERCORSI IDENTIFICATI ---
+    add_step_page(pdf, "PASSO 2: Risultato dei percorsi identificati")
+    pdf.add_page()
+    
+    # Questo accoglierà i dati veri e propri che stiamo per creare
+    write_markdown_to_pdf(pdf, tecnico_text)
 
     # --- PASSO 3: ANALISI INCROCIATA ---
     add_step_page(pdf, "PASSO 3: Analisi incrociata")
@@ -177,14 +169,14 @@ if id_ricercato:
             except:
                 score = 0
             
-            # NOVITÀ: Pulizia del nome del profilo per trovare il file giusto (rimuove "Profilo " se presente nell'excel)
+            # Pulisce la stringa del profilo per caricare il file esatto (es. "AB")
             profilo_codice_raw = str(riga['T12_PROFILO_STRATEGICO']).strip()
             profilo_codice = profilo_codice_raw.replace("Profilo ", "").replace("PROFILO ", "")
             
             if score < 3:
                 st.error("⚠️ Il Comune risulta in Livello 0. Action Plan non generabile.")
             else:
-                st.success(f"Dati pronti per {riga['NOME_COMUNE']}")
+                st.success(f"Dati pronti per {riga['NOME_COMUNE']} (Profilo identificato: {profilo_codice})")
 
                 def get_md(filename):
                     if os.path.exists(filename):
@@ -195,19 +187,19 @@ if id_ricercato:
                 intro_md = get_md("1-intro_it.md")
                 struttura_md = get_md("2-struttura_plan_it.md")
                 
-                # Passo 1
+                # --- PASSO 1: File Dinamici ---
                 mat_intro_md = get_md("3-maturita_intro_it.md")
                 if 3 <= score <= 8: mat_file = "3-maturita_L1_it.md"
                 elif 9 <= score <= 14: mat_file = "3-maturita_L2_it.md"
                 else: mat_file = "3-maturita_L3_it.md"
                 mat_dettaglio_md = get_md(mat_file)
 
-                # Passo 2
                 profilo_intro_md = get_md("4-profilo_intro_it.md")
                 profilo_file = f"4-profilo_{profilo_codice}_it.md"
                 profilo_dettaglio_md = get_md(profilo_file)
 
-                testo_tecnico = "In questa sezione verranno inseriti i dati numerici su fabbisogno e generazione."
+                # --- PASSO 2: Placeholder per l'analisi tecnica da popolare ---
+                testo_tecnico = "# Sintesi dei Risultati Tecnici\nIn questa sezione verranno inseriti i dati quantitativi raccolti sui percorsi (Domanda, Offerta, Logistica)."
 
                 if st.button("🚀 GENERA PDF"):
                     pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, profilo_intro_md, profilo_dettaglio_md, testo_tecnico)
