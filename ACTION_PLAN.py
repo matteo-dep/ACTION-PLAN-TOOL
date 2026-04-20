@@ -41,14 +41,12 @@ class H2ReadyPDF(FPDF):
 
 # --- 4. FUNZIONE PER PAGINE DI TITOLO (PASSI) ---
 def add_step_page(pdf, title):
-    """Genera una pagina di separazione con il titolo del Passo centrato"""
     pdf.add_page()
-    pdf.set_fill_color(0, 51, 153) # Blu istituzionale
-    pdf.rect(0, 0, 210, 297, 'F') # Pagina interamente blu
-    
+    pdf.set_fill_color(0, 51, 153) 
+    pdf.rect(0, 0, 210, 297, 'F') 
     pdf.set_y(130)
     pdf.set_font('Arial', 'B', 20)
-    pdf.set_text_color(255, 255, 255) # Testo bianco
+    pdf.set_text_color(255, 255, 255) 
     pdf.multi_cell(0, 15, clean_for_pdf(title), 0, 'C')
 
 # --- 5. FUNZIONE PER SCRIVERE IL MARKDOWN NEL PDF ---
@@ -81,7 +79,7 @@ def write_markdown_to_pdf(pdf, md_text):
             pdf.ln(2)
 
 # --- 6. FUNZIONE DI GENERAZIONE DEL DOCUMENTO PDF ---
-def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, tecnico_text):
+def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, profilo_intro, profilo_dettaglio, tecnico_text):
     pdf = H2ReadyPDF()
     
     # --- PAGINA 1: COPERTINA ---
@@ -114,35 +112,40 @@ def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, tec
     pdf.add_page()
     write_markdown_to_pdf(pdf, struttura_text)
 
-    # --- PASSO 1 ---
+    # --- PASSO 1: MATURITA E PROFILO IDENTIFICATO ---
     add_step_page(pdf, "PASSO 1: Determinazione del livello di maturità del comune e Profilo Identificato")
     pdf.add_page()
     write_markdown_to_pdf(pdf, mat_intro)
     pdf.ln(5)
     write_markdown_to_pdf(pdf, mat_dettaglio)
 
-    # --- PASSO 2 ---
+    # --- PASSO 2: RISULTATO DEI PERCORSI ---
     add_step_page(pdf, "PASSO 2: Risultato dei percorsi identificati")
     pdf.add_page()
-    pdf.set_font('Arial', 'B', 16)
-    pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "ANALISI TECNICA DEL TERRITORIO", 0, 1, 'L')
+    # Scrive l'introduzione comune dei percorsi
+    write_markdown_to_pdf(pdf, profilo_intro)
     pdf.ln(5)
+    # Scrive il testo specifico del Profilo (A, B, AB, ecc.)
+    write_markdown_to_pdf(pdf, profilo_dettaglio)
+
+    # --- SPAZIO PER I DATI TECNICI (Azione 2) ---
+    pdf.ln(10)
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(0, 51, 153)
+    pdf.cell(0, 10, "Risultati dell'Analisi Tecnica", 0, 1, 'L')
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 7, clean_for_pdf(tecnico_text))
 
-    # --- PASSO 3 ---
+    # --- PASSO 3: ANALISI INCROCIATA ---
     add_step_page(pdf, "PASSO 3: Analisi incrociata")
     pdf.add_page()
-    # Placeholder per l'Azione 3
     pdf.set_font('Arial', 'I', 11)
     pdf.cell(0, 10, "Sezione in fase di elaborazione...", 0, 1)
 
-    # --- PASSO 4 ---
+    # --- PASSO 4: ELABORAZIONE FINALE ---
     add_step_page(pdf, "PASSO 4: Elaborazione finale su misura")
     pdf.add_page()
-    # Placeholder per l'Azione 4
     pdf.set_font('Arial', 'I', 11)
     pdf.cell(0, 10, "Sezione in fase di elaborazione...", 0, 1)
     
@@ -168,6 +171,8 @@ if id_ricercato:
             except:
                 score = 0
             
+            profilo_codice = str(riga['T12_PROFILO_STRATEGICO']).strip()
+            
             if score < 3:
                 st.error("⚠️ Il Comune risulta in Livello 0. Action Plan non generabile.")
             else:
@@ -178,19 +183,28 @@ if id_ricercato:
                         with open(filename, "r", encoding="utf-8") as f: return f.read()
                     return f"[File {filename} non trovato]"
 
+                # File statici
                 intro_md = get_md("1-intro_it.md")
                 struttura_md = get_md("2-struttura_plan_it.md")
+                
+                # Passo 1
                 mat_intro_md = get_md("3-maturita_intro_it.md")
-
                 if 3 <= score <= 8: mat_file = "3-maturita_L1_it.md"
                 elif 9 <= score <= 14: mat_file = "3-maturita_L2_it.md"
                 else: mat_file = "3-maturita_L3_it.md"
                 mat_dettaglio_md = get_md(mat_file)
 
-                testo_tecnico = f"Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nAnalisi dei percorsi..."
+                # Passo 2
+                profilo_intro_md = get_md("4-profilo_intro_it.md") # La nuova introduzione
+                profilo_file = f"4-profilo_{profilo_codice}_it.md"
+                profilo_dettaglio_md = get_md(profilo_file)
+
+                # Testo tecnico (placeholder per i dati quantitativi)
+                testo_tecnico = "In questa sezione verranno inseriti i dati numerici sui consumi, LCOH e logistica."
 
                 if st.button("🚀 GENERA PDF"):
-                    pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, testo_tecnico)
+                    # Passiamo profilo_intro_md alla funzione
+                    pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, profilo_intro_md, profilo_dettaglio_md, testo_tecnico)
                     st.download_button(
                         label="⬇️ Scarica PDF",
                         data=pdf_bytes,
