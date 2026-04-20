@@ -120,50 +120,50 @@ def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, tec
 # --- LOGICA STREAMLIT ---
 # ... (Codice connessione GSheet)
 
-if id_ricercato:
-    try:
-        df = conn.read(ttl=0)
-        df.columns = df.columns.str.strip()
-        res = df[df['ID_ISTAT'].astype(str).str.strip() == str(id_ricercato).strip()]
-
-        if not res.empty:
-            riga = res.iloc[0]
-            score = int(riga['T11_LIVELLO_MATURITA'])
-            
-            # --- GESTIONE LIVELLO 0 ---
-            if score < 3:
-                st.error("⚠️ Il Comune risulta in Livello 0. Per questo livello non è prevista la redazione di un Action Plan automatico. Si consiglia di procedere prima con attività di assistenza tecnica e formazione.")
-            else:
-                st.success(f"Dati pronti per {riga['NOME_COMUNE']} (Livello {score})")
-
-                def get_md(filename):
-                    if os.path.exists(filename):
-                        with open(filename, "r", encoding="utf-8") as f: return f.read()
-                    return f"[Errore: {filename} non trovato]"
-
-                intro_md = get_md("1-intro_it.md")
-                struttura_md = get_md("2-struttura_plan_it.md")
-                mat_intro_md = get_md("3-maturita_intro_it.md")
-
-                # LOGICA DINAMICA MATURITÀ
-                if 3 <= score <= 8: mat_file = "3-maturita_L1_it.md"
-                elif 9 <= score <= 14: mat_file = "3-maturita_L2_it.md"
-                else: mat_file = "3-maturita_L3_it.md"
+    if id_ricercato:
+        try:
+            df = conn.read(ttl=0)
+            df.columns = df.columns.str.strip()
+            res = df[df['ID_ISTAT'].astype(str).str.strip() == str(id_ricercato).strip()]
+    
+            if not res.empty:
+                riga = res.iloc[0]
+                score = int(riga['T11_LIVELLO_MATURITA'])
                 
-                mat_dettaglio_md = get_md(mat_file)
-
-                # Testo Tecnico Temporaneo
-                testo_tecnico = f"Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nAnalisi in corso..."
-
-                if st.button("🚀 GENERA PDF"):
-                    pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, testo_tecnico)
-                    st.download_button(
-                        label="⬇️ Scarica PDF",
-                        data=pdf_bytes,
-                        file_name=f"H2READY_{riga['NOME_COMUNE']}.pdf",
-                        mime="application/pdf"
-                    )
-        else:
-            st.warning("ID non trovato.")
-    except Exception as e:
-        st.error(f"Errore tecnico: {e}")
+                # --- GESTIONE LIVELLO 0 ---
+                if score < 3:
+                    st.error("⚠️ Il Comune risulta in Livello 0. Per questo livello non è prevista la redazione di un Action Plan automatico. Si consiglia di procedere prima con attività di assistenza tecnica e formazione.")
+                else:
+                    st.success(f"Dati pronti per {riga['NOME_COMUNE']} (Livello {score})")
+    
+                    def get_md(filename):
+                        if os.path.exists(filename):
+                            with open(filename, "r", encoding="utf-8") as f: return f.read()
+                        return f"[Errore: {filename} non trovato]"
+    
+                    intro_md = get_md("1-intro_it.md")
+                    struttura_md = get_md("2-struttura_plan_it.md")
+                    mat_intro_md = get_md("3-maturita_intro_it.md")
+    
+                    # LOGICA DINAMICA MATURITÀ
+                    if 3 <= score <= 8: mat_file = "3-maturita_L1_it.md"
+                    elif 9 <= score <= 14: mat_file = "3-maturita_L2_it.md"
+                    else: mat_file = "3-maturita_L3_it.md"
+                    
+                    mat_dettaglio_md = get_md(mat_file)
+    
+                    # Testo Tecnico Temporaneo
+                    testo_tecnico = f"Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nAnalisi in corso..."
+    
+                    if st.button("🚀 GENERA PDF"):
+                        pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, testo_tecnico)
+                        st.download_button(
+                            label="⬇️ Scarica PDF",
+                            data=pdf_bytes,
+                            file_name=f"H2READY_{riga['NOME_COMUNE']}.pdf",
+                            mime="application/pdf"
+                        )
+            else:
+                st.warning("ID non trovato.")
+        except Exception as e:
+            st.error(f"Errore tecnico: {e}")
