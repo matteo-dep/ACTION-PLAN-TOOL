@@ -1,4 +1,6 @@
-# Livello 1: Posizionamento e Mappatura Preliminare  
+# Risultato 1: Livello di maturità   
+
+STATO: LIVELLO 1, BEGINNERP
 
 L'analisi evidenzia un livello di maturità iniziale, in cui l'azione amministrativa deve essere orientata prioritariamente alla costruzione delle basi conoscitive e alla mappatura del potenziale inespresso del territorio. In questo stadio, l'Action Plan assume il ruolo di un documento di orientamento strategico di massima, finalizzato a inquadrare il tema dell'idrogeno all'interno delle politiche ambientali ed energetiche esistenti. La priorità assoluta risiede nell'identificazione degli stakeholder critici e nella definizione di un profilo territoriale unico, che permetta di comprendere se la vocazione locale sia orientata alla domanda industriale, alla produzione energetica o alla logistica di transito.
 
