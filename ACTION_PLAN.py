@@ -1,3 +1,69 @@
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+from fpdf import FPDF
+import os
+
+# --- 1. FUNZIONE DI PULIZIA CARATTERI ---
+def clean_for_pdf(text):
+    replacements = {
+        '“': '"', '”': '"', '‘': "'", '’': "'", 
+        '–': '-', '—': '-', '…': '...',
+        '€': 'Euro', 'CO₂': 'CO2', 'H₂': 'H2',
+        '✅': '-', '•': '-', '·': '-'
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text.encode('latin-1', 'replace').decode('latin-1')
+
+# --- 2. CLASSE PDF PROFESSIONALE ---
+class H2ReadyPDF(FPDF):
+    def header(self):
+        if self.page_no() > 1:
+            if os.path.exists("logo_h2ready.png"):
+                self.image("logo_h2ready.png", 10, 8, 25)
+            self.set_font('Arial', 'B', 8)
+            self.set_text_color(150)
+            self.set_x(40)
+            self.cell(0, 5, 'H2READY - Progetto Interreg Italia-Slovenia', 0, 1, 'L')
+            self.line(10, 18, 200, 18)
+            self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f'Pagina {self.page_no()} - Documento generato dal Toolkit H2READY', 0, 0, 'C')
+
+# --- 3. FUNZIONE PER SCRIVERE IL MARKDOWN NEL PDF ---
+def write_markdown_to_pdf(pdf, md_text):
+    lines = md_text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            pdf.ln(5) 
+            continue
+        
+        if line.startswith('###'):
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 51, 153)
+            pdf.cell(0, 10, clean_for_pdf(line.replace('###', '').strip()), 0, 1)
+            pdf.set_text_color(0, 0, 0) 
+        elif line.startswith('##'):
+            pdf.set_font('Arial', 'B', 14)
+            pdf.set_text_color(0, 51, 153)
+            pdf.cell(0, 10, clean_for_pdf(line.replace('##', '').strip()), 0, 1)
+            pdf.set_text_color(0, 0, 0)
+        elif line.startswith('#'):
+            pdf.set_font('Arial', 'B', 16)
+            pdf.set_text_color(0, 51, 153)
+            pdf.cell(0, 10, clean_for_pdf(line.replace('#', '').strip()), 0, 1)
+            pdf.set_text_color(0, 0, 0)
+        else:
+            pdf.set_font('Arial', '', 11)
+            pdf.multi_cell(0, 7, clean_for_pdf(line))
+            pdf.ln(2)
+
+# --- 4. FUNZIONE DI GENERAZIONE DEL DOCUMENTO PDF ---
 # ... (Parti precedenti: clean_for_pdf, H2ReadyPDF, write_markdown_to_pdf rimangono uguali)
 
 def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, tecnico_text):
