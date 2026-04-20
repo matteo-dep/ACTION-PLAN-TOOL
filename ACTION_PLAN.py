@@ -3,9 +3,8 @@ from streamlit_gsheets import GSheetsConnection
 from fpdf import FPDF
 import os
 
-# --- 1. FUNZIONE DI PULIZIA CARATTERI PER PDF ---
+# --- 1. FUNZIONE DI PULIZIA CARATTERI ---
 def clean_for_pdf(text):
-    """Sostituisce i caratteri Unicode non supportati dai font standard PDF"""
     replacements = {
         '“': '"', '”': '"', '‘': "'", '’': "'", 
         '–': '-', '—': '-', '…': '...',
@@ -14,7 +13,6 @@ def clean_for_pdf(text):
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
-    # Rimuove eventuali altri caratteri non latin-1 per sicurezza
     return text.encode('latin-1', 'replace').decode('latin-1')
 
 # --- 2. CLASSE PDF PROFESSIONALE ---
@@ -36,13 +34,45 @@ class H2ReadyPDF(FPDF):
         self.set_text_color(128)
         self.cell(0, 10, f'Pagina {self.page_no()} - Documento generato dal Toolkit H2READY', 0, 0, 'C')
 
+# --- 3. FUNZIONE PER SCRIVERE IL MARKDOWN NEL PDF ---
+def write_markdown_to_pdf(pdf, md_text):
+    """Parsa i titoli #, ##, ### e scrive il testo nel PDF con lo stile corretto"""
+    lines = md_text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            pdf.ln(5) # Riga vuota
+            continue
+        
+        # Gestione Titoli
+        if line.startswith('###'):
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 51, 153)
+            pdf.cell(0, 10, clean_for_pdf(line.replace('###', '').strip()), 0, 1)
+            pdf.set_text_color(0, 0, 0) # Reset colore
+        elif line.startswith('##'):
+            pdf.set_font('Arial', 'B', 14)
+            pdf.set_text_color(0, 51, 153)
+            pdf.cell(0, 10, clean_for_pdf(line.replace('##', '').strip()), 0, 1)
+            pdf.set_text_color(0, 0, 0)
+        elif line.startswith('#'):
+            pdf.set_font('Arial', 'B', 16)
+            pdf.set_text_color(0, 51, 153)
+            pdf.cell(0, 10, clean_for_pdf(line.replace('#', '').strip()), 0, 1)
+            pdf.set_text_color(0, 0, 0)
+        else:
+            # Testo normale
+            pdf.set_font('Arial', '', 11)
+            pdf.multi_cell(0, 7, clean_for_pdf(line))
+            pdf.ln(2)
+
 def generate_pdf(riga, intro_text, tecnico_text):
     pdf = H2ReadyPDF()
     
     # --- PAGINA 1: COPERTINA ---
     pdf.add_page()
-    pdf.set_fill_color(0, 51, 153) # Blu Interreg
-    pdf.rect(0, 0, 10, 297, 'F') # Fascia laterale
+    pdf.set_fill_color(0, 51, 153) 
+    pdf.rect(0, 0, 10, 297, 'F') 
     
     if os.path.exists("logo_h2ready.png"):
         pdf.image("logo_h2ready.png", x=75, y=30, w=60)
@@ -64,39 +94,31 @@ def generate_pdf(riga, intro_text, tecnico_text):
     pdf.cell(0, 10, "Documento Strategico di Transizione Energetica", 0, 1, 'C')
     pdf.cell(0, 10, "Progetto cofinanziato dall'Unione Europea", 0, 1, 'C')
 
-    # --- PAGINA 2: INTRODUZIONE (Dal file .md) ---
+    # --- PAGINA 2: INTRODUZIONE (Parsata) ---
     pdf.add_page()
-    pdf.set_font('Arial', 'B', 16)
-    pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "1. CONTESTO E OBIETTIVI", 0, 1, 'L')
-    pdf.ln(5)
-    
-    pdf.set_font('Arial', '', 11)
-    pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 7, clean_for_pdf(intro_text))
+    # Invece di multi_cell, usiamo la nostra funzione parser
+    write_markdown_to_pdf(pdf, intro_text)
 
     # --- PAGINA 3: ANALISI TECNICA (Dal GSheet) ---
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "2. ANALISI DEL TERRITORIO", 0, 1, 'L')
+    pdf.cell(0, 10, "ANALISI DEL TERRITORIO", 0, 1, 'L')
     pdf.ln(5)
-    
     pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 7, clean_for_pdf(tecnico_text))
     
     return bytes(pdf.output())
 
-# --- 3. LOGICA STREAMLIT ---
+# --- 4. LOGICA STREAMLIT ---
 st.set_page_config(page_title="H2READY Toolkit", layout="centered")
 
-# Header Estetico
 st.markdown('<div style="background-color:#003399;padding:20px;border-radius:10px;text-align:center"><h1 style="color:white;margin:0">H2READY TOOLKIT</h1></div>', unsafe_allow_html=True)
 st.write("")
 
-# Ricerca
 conn = st.connection("gsheets", type=GSheetsConnection)
-id_ricercato = st.text_input("Inserisci ID_ISTAT del Comune per generare il PDF:")
+id_ricercato = st.text_input("Inserisci ID_ISTAT:")
 
 if id_ricercato:
     try:
@@ -106,29 +128,23 @@ if id_ricercato:
 
         if not res.empty:
             riga = res.iloc[0]
-            st.success(f"Dati pronti per il Comune di {riga['NOME_COMUNE']}")
+            st.success(f"Dati pronti per {riga['NOME_COMUNE']}")
 
-            # 1. Carichiamo il testo dal file .md (che NON mostriamo a video)
             intro_path = "1-intro_it.md"
             intro_md = ""
             if os.path.exists(intro_path):
                 with open(intro_path, "r", encoding="utf-8") as f:
                     intro_md = f.read()
 
-            # 2. Prepariamo il testo tecnico dai dati GSheet
-            testo_tecnico = f"POSIZIONAMENTO STRATEGICO\n- Livello di Maturità: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo Identificato: {riga['T12_PROFILO_STRATEGICO']}\n\n"
-            testo_tecnico += f"SINTESI TECNICA:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici e sinergie territoriali.')}"
+            testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
 
-            # 3. Bottone per il PDF
-            if st.button("🚀 GENERA E SCARICA ACTION PLAN"):
+            if st.button("🚀 GENERA PDF"):
                 pdf_bytes = generate_pdf(riga, intro_md, testo_tecnico)
                 st.download_button(
-                    label="⬇️ Clicca qui per il Download",
+                    label="⬇️ Scarica PDF",
                     data=pdf_bytes,
-                    file_name=f"H2READY_ActionPlan_{riga['NOME_COMUNE']}.pdf",
+                    file_name=f"H2READY_{riga['NOME_COMUNE']}.pdf",
                     mime="application/pdf"
                 )
-        else:
-            st.warning("ID non trovato nel database.")
     except Exception as e:
         st.error(f"Errore: {e}")
