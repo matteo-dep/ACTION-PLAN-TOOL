@@ -3,86 +3,88 @@ from streamlit_gsheets import GSheetsConnection
 from fpdf import FPDF
 import os
 
-# --- 1. CONFIGURAZIONE PDF PROFESSIONALE ---
+# --- 1. CLASSE PDF PROFESSIONALE ---
 class H2ReadyPDF(FPDF):
     def header(self):
+        # Logo piccolo in alto a sinistra (solo dalle pagine successive alla copertina)
         if self.page_no() > 1:
+            if os.path.exists("logo_h2ready.png"):
+                self.image("logo_h2ready.png", 10, 8, 25)
             self.set_font('Arial', 'B', 8)
             self.set_text_color(150)
-            self.cell(0, 5, 'H2READY - Action Plan Transfrontaliero', 0, 1, 'R')
-            self.line(10, 15, 200, 15) # Linea sotto header
-            self.ln(5)
+            self.set_x(40) # Sposta il testo per non sovrapporsi al logo
+            self.cell(0, 5, 'H2READY - Progetto Interreg Italia-Slovenia', 0, 1, 'L')
+            self.line(10, 18, 200, 18)
+            self.ln(10)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(128)
-        self.cell(0, 10, f'Pagina {self.page_no()} - Progetto cofinanziato dall\'Unione europea - Interreg Italia-Slovenia', 0, 0, 'C')
+        self.cell(0, 10, f'Pagina {self.page_no()} - Documento generato dal Toolkit H2READY', 0, 0, 'C')
 
-def generate_pdf(riga, intro_text, plan_text, lingua):
+def generate_pdf(riga, intro_text, plan_text, lang_code):
     pdf = H2ReadyPDF()
     
-    # --- PAGINA 1: COPERTINA ISTITUZIONALE ---
+    # --- PAGINA 1: COPERTINA ---
     pdf.add_page()
-    
-    # Sfondo Blu per fascia superiore (stile sito)
+    # Fascia Blu Laterale (Stile moderno)
     pdf.set_fill_color(0, 51, 153)
-    pdf.rect(0, 0, 210, 100, 'F')
+    pdf.rect(0, 0, 10, 297, 'F')
     
-    # Titolo in Bianco su fondo Blu
-    pdf.set_y(40)
+    # Logo centrato in copertina
+    if os.path.exists("logo_h2ready.png"):
+        pdf.image("logo_h2ready.png", x=75, y=30, w=60)
+    
+    pdf.set_y(100)
     pdf.set_font('Arial', 'B', 32)
-    pdf.set_text_color(255, 255, 255)
+    pdf.set_text_color(0, 51, 153)
     pdf.cell(0, 20, "ACTION PLAN", 0, 1, 'C')
     pdf.set_font('Arial', 'B', 40)
     pdf.cell(0, 20, "H2READY", 0, 1, 'C')
     
-    # Dettagli Comune (sotto la fascia blu)
-    pdf.set_y(120)
+    pdf.ln(30)
     pdf.set_font('Arial', 'B', 24)
-    pdf.set_text_color(0, 51, 153)
+    pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 15, f"COMUNE DI {riga['NOME_COMUNE'].upper()}", 0, 1, 'C')
     
-    pdf.set_y(150)
-    pdf.set_font('Arial', '', 14)
-    pdf.set_text_color(50, 50, 50)
-    data_gen = "Aprile 2024" # O dinamica
-    pdf.cell(0, 10, f"Strategia per lo sviluppo di ecosistemi a idrogeno verde", 0, 1, 'C')
-    pdf.cell(0, 10, f"Documento Tecnico Strategico", 0, 1, 'C')
+    pdf.set_y(-50)
+    pdf.set_font('Arial', '', 12)
+    pdf.cell(0, 10, "Documento Strategico di Transizione Energetica", 0, 1, 'C')
+    pdf.cell(0, 10, "Progetto cofinanziato dall'Unione Europea", 0, 1, 'C')
 
-    # --- PAGINA 2: INTRODUZIONE E CONTESTO (AMETHyST Style) ---
+    # --- PAGINA 2: INTRODUZIONE (Testo 1-intro_...) ---
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 51, 153)
-    titolo_intro = {"it": "1. CONTESTO E OBIETTIVI", "en": "1. CONTEXT AND OBJECTIVES", "sl": "1. KONTEKST IN CILJI"}
-    pdf.cell(0, 10, titolo_intro.get(lang_code, titolo_intro["it"]), 0, 1, 'L')
+    pdf.cell(0, 10, "1. CONTESTO E OBIETTIVI", 0, 1, 'L')
     pdf.ln(5)
     
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    # Pulizia caratteri per FPDF
-    intro_pulita = intro_text.replace('’', "'").replace('✅', "-").replace('€', "Euro").replace('•', "-")
-    pdf.multi_cell(0, 7, intro_pulita)
+    # Pulizia caratteri speciali
+    clean_intro = intro_text.replace('’', "'").replace('✅', "-").replace('€', "Euro").replace('•', "-")
+    pdf.multi_cell(0, 7, clean_intro)
 
-    # --- PAGINA 3+: PIANO D'AZIONE TECNICO ---
+    # --- PAGINA 3: ANALISI TECNICA (Dati GSheet) ---
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 51, 153)
-    titolo_plan = {"it": "2. ANALISI E ROADMAP", "en": "2. ANALYSIS AND ROADMAP", "sl": "2. ANALIZA IN NAČRT"}
-    pdf.cell(0, 10, titolo_plan.get(lang_code, titolo_plan["it"]), 0, 1, 'L')
+    pdf.cell(0, 10, "2. ANALISI DEL TERRITORIO", 0, 1, 'L')
     pdf.ln(5)
-
+    
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    plan_pulito = plan_text.replace('’', "'").replace('✅', "-").replace('€', "Euro").replace('•', "-")
-    pdf.multi_cell(0, 7, plan_pulito)
+    clean_plan = plan_text.replace('’', "'").replace('✅', "-").replace('€', "Euro")
+    pdf.multi_cell(0, 7, clean_plan)
     
     return bytes(pdf.output())
 
 # --- 2. FUNZIONI DI CARICAMENTO ---
-def load_markdown(file_path):
-    if os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8") as f:
+def load_markdown(num, tag, lang):
+    filename = f"{num}-{tag}_{lang}.md"
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as f:
             return f.read()
     return "Contenuto non disponibile."
 
@@ -93,18 +95,18 @@ st.set_page_config(page_title="H2READY Toolkit", layout="wide")
 lingua = st.sidebar.selectbox("Seleziona Lingua", ["Italiano", "English", "Slovenščina"])
 lang_code = {"Italiano": "it", "English": "en", "Slovenščina": "sl"}[lingua]
 
-# UI Streamlit (Sito Style)
+# Hero Header Streamlit
 st.markdown('<div style="background-color:#003399;padding:20px;border-radius:10px"><h1 style="color:white;text-align:center">H2READY TOOLKIT</h1></div>', unsafe_allow_html=True)
 
-# Caricamento testi intro
-intro_md = load_markdown(f"intro_{lang_code}.md")
+# Caricamento dinamico col nuovo sistema numerato
+intro_md = load_markdown(1, "intro", lang_code)
 st.markdown(intro_md)
 
 st.divider()
 
-# Logica di ricerca
+# Logica GSheet
 conn = st.connection("gsheets", type=GSheetsConnection)
-id_ricercato = st.text_input("Inserisci ID_ISTAT:")
+id_ricercato = st.text_input("Inserisci ID_ISTAT del Comune:")
 
 if id_ricercato:
     try:
@@ -114,21 +116,20 @@ if id_ricercato:
 
         if not res.empty:
             riga = res.iloc[0]
-            st.success(f"Generazione piano per: {riga['NOME_COMUNE']}")
+            st.success(f"Dati caricati per: {riga['NOME_COMUNE']}")
 
-            # Costruiamo il testo tecnico del piano
-            testo_tecnico = f"Profilo Strategico: {riga['T12_PROFILO_STRATEGICO']}\n"
-            testo_tecnico += f"Maturità: {riga['T11_LIVELLO_MATURITA']}/18\n\n"
-            testo_tecnico += f"Sinergie: {riga.get('T12_NOTE_SINERGIE', 'In fase di analisi.')}"
+            # Costruzione testo tecnico
+            testo_tecnico = f"POSIZIONAMENTO (AZIONE 1)\n- Maturità: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\n"
+            testo_tecnico += f"ANALISI TECNICA (AZIONE 2)\n"
+            testo_tecnico += f"- Percorso: {riga.get('T12_NOTE_SINERGIE', 'Dati tecnici in elaborazione.')}"
 
             # TASTO PDF
             if st.button("🚀 GENERA PDF ISTITUZIONALE"):
-                # PASSIAMO SIA L'INTRO CHE IL PIANO
-                pdf_bytes = generate_pdf(riga, intro_md, testo_tecnico, lingua)
+                pdf_bytes = generate_pdf(riga, intro_md, testo_tecnico, lang_code)
                 st.download_button(
-                    label="⬇️ Scarica PDF",
+                    label="⬇️ Scarica Action Plan",
                     data=pdf_bytes,
-                    file_name=f"H2READY_{riga['NOME_COMUNE']}.pdf",
+                    file_name=f"ActionPlan_{riga['NOME_COMUNE']}.pdf",
                     mime="application/pdf"
                 )
     except Exception as e:
