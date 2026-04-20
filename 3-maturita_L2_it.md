@@ -1,4 +1,6 @@
-#Livello 2: Integrazione Strategica e Analisi di Distretto  
+# Risultato 1: Livello di maturità   
+
+STATO: LIVELLO 2 - INTERMEDIO 
 
 Il posizionamento dell'Ente in una fase di maturità intermedia permette di elevare significativamente il grado di dettaglio del documento, trasformandolo in una vera e propria pianificazione strategica avanzata. Con una struttura tecnica già dotata di competenze specifiche, l'Action Plan entra nel merito delle sinergie territoriali complesse, analizzando profili misti che integrano la domanda dei settori industriali più critici con l'offerta potenziale derivante da impianti a fonti rinnovabili locali. Grazie alla solidità dei dati raccolti, il documento approfondisce gli aspetti tecnico-economici attraverso l'analisi dei costi livellati (LCOH), fornendo una visione granulare della sostenibilità degli interventi nel medio termine.
 
