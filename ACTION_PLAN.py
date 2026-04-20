@@ -36,20 +36,18 @@ class H2ReadyPDF(FPDF):
 
 # --- 3. FUNZIONE PER SCRIVERE IL MARKDOWN NEL PDF ---
 def write_markdown_to_pdf(pdf, md_text):
-    """Parsa i titoli #, ##, ### e scrive il testo nel PDF con lo stile corretto"""
     lines = md_text.split('\n')
     for line in lines:
         line = line.strip()
         if not line:
-            pdf.ln(5) # Riga vuota
+            pdf.ln(5) 
             continue
         
-        # Gestione Titoli
         if line.startswith('###'):
             pdf.set_font('Arial', 'B', 12)
             pdf.set_text_color(0, 51, 153)
             pdf.cell(0, 10, clean_for_pdf(line.replace('###', '').strip()), 0, 1)
-            pdf.set_text_color(0, 0, 0) # Reset colore
+            pdf.set_text_color(0, 0, 0) 
         elif line.startswith('##'):
             pdf.set_font('Arial', 'B', 14)
             pdf.set_text_color(0, 51, 153)
@@ -61,11 +59,11 @@ def write_markdown_to_pdf(pdf, md_text):
             pdf.cell(0, 10, clean_for_pdf(line.replace('#', '').strip()), 0, 1)
             pdf.set_text_color(0, 0, 0)
         else:
-            # Testo normale
             pdf.set_font('Arial', '', 11)
             pdf.multi_cell(0, 7, clean_for_pdf(line))
             pdf.ln(2)
 
+# --- 4. FUNZIONE DI GENERAZIONE DEL DOCUMENTO PDF ---
 def generate_pdf(riga, intro_text, struttura_text, maturita_text, tecnico_text):
     pdf = H2ReadyPDF()
     
@@ -107,7 +105,7 @@ def generate_pdf(riga, intro_text, struttura_text, maturita_text, tecnico_text):
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "ANALISI TECNICA DEL TERRITORIO", 0, 1, 'L')
+    pdf.cell(0, 10, "2. ANALISI TECNICA DEL TERRITORIO", 0, 1, 'L')
     pdf.ln(5)
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
@@ -115,12 +113,13 @@ def generate_pdf(riga, intro_text, struttura_text, maturita_text, tecnico_text):
     
     return bytes(pdf.output())
 
-# --- 4. LOGICA STREAMLIT ---
+# --- 5. LOGICA STREAMLIT ---
 st.set_page_config(page_title="H2READY Toolkit", layout="centered")
 
 st.markdown('<div style="background-color:#003399;padding:20px;border-radius:10px;text-align:center"><h1 style="color:white;margin:0">H2READY TOOLKIT</h1></div>', unsafe_allow_html=True)
 st.write("")
 
+# Connessione GSheet
 conn = st.connection("gsheets", type=GSheetsConnection)
 id_ricercato = st.text_input("Inserisci ID_ISTAT:")
 
@@ -130,29 +129,48 @@ if id_ricercato:
         df.columns = df.columns.str.strip()
         res = df[df['ID_ISTAT'].astype(str).str.strip() == str(id_ricercato).strip()]
 
-    if not res.empty:
-        riga = res.iloc[0]
-                
-                # Caricamento Blocchi Fissi
-        def get_md(filename):
-            if os.path.exists(filename):
-                with open(filename, "r", encoding="utf-8") as f: return f.read()
-            return ""
+        if not res.empty:
+            riga = res.iloc[0]
+            st.success(f"Dati pronti per {riga['NOME_COMUNE']}")
 
-        intro_md = get_md("1-intro_it.md")
-        struttura_md = get_md("2-struttura_plan_it.md")
+            # Funzione interna per caricare i file MD in sicurezza
+            def get_md(filename):
+                if os.path.exists(filename):
+                    with open(filename, "r", encoding="utf-8") as f: 
+                        return f.read()
+                return f"[File {filename} non trovato]"
 
-        # LOGICA DINAMICA MATURITÀ
+            # Caricamento Blocchi Fissi
+            intro_md = get_md("1-intro_it.md")
+            struttura_md = get_md("2-struttura_plan_it.md")
 
-        testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
+            # Logica Dinamica per la Maturità
+            score = int(riga['T11_LIVELLO_MATURITA'])
+            if score < 3: 
+                mat_file = "3-maturita_L0_it.md"
+            elif 3 <= score <= 8: 
+                mat_file = "3-maturita_L1_it.md"
+            elif 9 <= score <= 14: 
+                mat_file = "3-maturita_L2_it.md"
+            else: 
+                mat_file = "3-maturita_L3_it.md"
+            
+            maturita_md = get_md(mat_file)
 
+            # Testo Tecnico (Temporaneo, in attesa dell'Azione 2)
+            testo_tecnico = f"Profilo assegnato: {riga['T12_PROFILO_STRATEGICO']}\n\nQuesta sezione accoglierà i dati specifici su domanda e offerta elaborati dai moduli successivi."
+
+            # Bottone PDF
             if st.button("🚀 GENERA PDF"):
-                pdf_bytes = generate_pdf(riga, intro_md, testo_tecnico)
+                pdf_bytes = generate_pdf(riga, intro_md, struttura_md, maturita_md, testo_tecnico)
                 st.download_button(
                     label="⬇️ Scarica PDF",
                     data=pdf_bytes,
                     file_name=f"H2READY_{riga['NOME_COMUNE']}.pdf",
                     mime="application/pdf"
                 )
+        else:
+            st.warning("ID non trovato nel database.")
+            
     except Exception as e:
-        st.error(f"Errore: {e}")
+        st.error(f"Errore tecnico: {e}")
