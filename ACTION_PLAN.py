@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 from fpdf import FPDF
 import os
 
-# --- 1. CONFIGURAZIONE STREAMLIT (Deve essere il primo comando) ---
+# --- 1. CONFIGURAZIONE STREAMLIT ---
 st.set_page_config(page_title="H2READY Toolkit", layout="centered")
 
 # --- 2. FUNZIONE DI PULIZIA CARATTERI ---
@@ -39,7 +39,19 @@ class H2ReadyPDF(FPDF):
         self.set_text_color(128)
         self.cell(0, 10, f'Pagina {self.page_no()} - Documento generato dal Toolkit H2READY', 0, 0, 'C')
 
-# --- 4. FUNZIONE PER SCRIVERE IL MARKDOWN NEL PDF ---
+# --- 4. FUNZIONE PER PAGINE DI TITOLO (PASSI) ---
+def add_step_page(pdf, title):
+    """Genera una pagina di separazione con il titolo del Passo centrato"""
+    pdf.add_page()
+    pdf.set_fill_color(0, 51, 153) # Blu istituzionale
+    pdf.rect(0, 0, 210, 297, 'F') # Pagina interamente blu
+    
+    pdf.set_y(130)
+    pdf.set_font('Arial', 'B', 20)
+    pdf.set_text_color(255, 255, 255) # Testo bianco
+    pdf.multi_cell(0, 15, clean_for_pdf(title), 0, 'C')
+
+# --- 5. FUNZIONE PER SCRIVERE IL MARKDOWN NEL PDF ---
 def write_markdown_to_pdf(pdf, md_text):
     lines = md_text.split('\n')
     for line in lines:
@@ -68,7 +80,7 @@ def write_markdown_to_pdf(pdf, md_text):
             pdf.multi_cell(0, 7, clean_for_pdf(line))
             pdf.ln(2)
 
-# --- 5. FUNZIONE DI GENERAZIONE DEL DOCUMENTO PDF ---
+# --- 6. FUNZIONE DI GENERAZIONE DEL DOCUMENTO PDF ---
 def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, tecnico_text):
     pdf = H2ReadyPDF()
     
@@ -96,41 +108,53 @@ def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, tec
     pdf.cell(0, 10, "Documento Strategico di Transizione Energetica", 0, 1, 'C')
     pdf.cell(0, 10, "Progetto cofinanziato dall'Unione Europea", 0, 1, 'C')
 
-    # --- PAGINA 2: INTRODUZIONE E STRUTTURA ---
+    # --- INTRODUZIONE E STRUTTURA ---
     pdf.add_page()
     write_markdown_to_pdf(pdf, intro_text)
     pdf.add_page()
     write_markdown_to_pdf(pdf, struttura_text)
 
-    # --- PAGINA 3: ANALISI MATURITÀ (DINAMICA: INTRO + LIVELLO) ---
+    # --- PASSO 1 ---
+    add_step_page(pdf, "PASSO 1: Determinazione del livello di maturità del comune e Profilo Identificato")
     pdf.add_page()
     write_markdown_to_pdf(pdf, mat_intro)
     pdf.ln(5)
     write_markdown_to_pdf(pdf, mat_dettaglio)
 
-    # --- PAGINA 4: ANALISI TECNICA ---
+    # --- PASSO 2 ---
+    add_step_page(pdf, "PASSO 2: Risultato dei percorsi identificati")
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(0, 51, 153)
-    pdf.cell(0, 10, "2. ANALISI TECNICA DEL TERRITORIO", 0, 1, 'L')
+    pdf.cell(0, 10, "ANALISI TECNICA DEL TERRITORIO", 0, 1, 'L')
     pdf.ln(5)
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 7, clean_for_pdf(tecnico_text))
+
+    # --- PASSO 3 ---
+    add_step_page(pdf, "PASSO 3: Analisi incrociata")
+    pdf.add_page()
+    # Placeholder per l'Azione 3
+    pdf.set_font('Arial', 'I', 11)
+    pdf.cell(0, 10, "Sezione in fase di elaborazione...", 0, 1)
+
+    # --- PASSO 4 ---
+    add_step_page(pdf, "PASSO 4: Elaborazione finale su misura")
+    pdf.add_page()
+    # Placeholder per l'Azione 4
+    pdf.set_font('Arial', 'I', 11)
+    pdf.cell(0, 10, "Sezione in fase di elaborazione...", 0, 1)
     
     return bytes(pdf.output())
 
-# --- 6. LOGICA E INTERFACCIA STREAMLIT ---
+# --- 7. LOGICA E INTERFACCIA STREAMLIT ---
 st.markdown('<div style="background-color:#003399;padding:20px;border-radius:10px;text-align:center"><h1 style="color:white;margin:0">H2READY TOOLKIT</h1></div>', unsafe_allow_html=True)
 st.write("")
 
-# Connessione GSheet
 conn = st.connection("gsheets", type=GSheetsConnection)
-
-# Input utente
 id_ricercato = st.text_input("Inserisci ID_ISTAT:")
 
-# Logica di elaborazione
 if id_ricercato:
     try:
         df = conn.read(ttl=0)
@@ -139,44 +163,33 @@ if id_ricercato:
 
         if not res.empty:
             riga = res.iloc[0]
-            
-            # Controllo sicurezza sul valore numerico
             try:
                 score = int(riga['T11_LIVELLO_MATURITA'])
-            except (ValueError, TypeError):
+            except:
                 score = 0
             
-            # --- GESTIONE LIVELLO 0 ---
             if score < 3:
-                st.error("⚠️ Il Comune risulta in Livello 0 o dati mancanti. Per questo livello non è prevista la redazione di un Action Plan automatico. Si consiglia di procedere prima con attività di assistenza tecnica e formazione.")
+                st.error("⚠️ Il Comune risulta in Livello 0. Action Plan non generabile.")
             else:
-                st.success(f"Dati pronti per {riga['NOME_COMUNE']} (Livello Maturità: {score})")
+                st.success(f"Dati pronti per {riga['NOME_COMUNE']}")
 
                 def get_md(filename):
                     if os.path.exists(filename):
                         with open(filename, "r", encoding="utf-8") as f: return f.read()
-                    return f"[Errore: File {filename} non trovato. Verificare la repository.]"
+                    return f"[File {filename} non trovato]"
 
-                # Caricamento testi statici
                 intro_md = get_md("1-intro_it.md")
                 struttura_md = get_md("2-struttura_plan_it.md")
                 mat_intro_md = get_md("3-maturita_intro_it.md")
 
-                # LOGICA DINAMICA MATURITÀ
-                if 3 <= score <= 8: 
-                    mat_file = "3-maturita_L1_it.md"
-                elif 9 <= score <= 14: 
-                    mat_file = "3-maturita_L2_it.md"
-                else: 
-                    mat_file = "3-maturita_L3_it.md"
-                
+                if 3 <= score <= 8: mat_file = "3-maturita_L1_it.md"
+                elif 9 <= score <= 14: mat_file = "3-maturita_L2_it.md"
+                else: mat_file = "3-maturita_L3_it.md"
                 mat_dettaglio_md = get_md(mat_file)
 
-                # Testo Tecnico (Temporaneo in attesa di Azione 2)
-                testo_tecnico = f"Profilo Assegnato: {riga['T12_PROFILO_STRATEGICO']}\n\nQuesta sezione accoglierà i dati specifici elaborati dai moduli successivi (Domanda, Offerta, Bilancio)."
+                testo_tecnico = f"Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nAnalisi dei percorsi..."
 
-                # Pulsante di generazione PDF
-                if st.button("🚀 GENERA ACTION PLAN (PDF)"):
+                if st.button("🚀 GENERA PDF"):
                     pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, testo_tecnico)
                     st.download_button(
                         label="⬇️ Scarica PDF",
@@ -185,7 +198,7 @@ if id_ricercato:
                         mime="application/pdf"
                     )
         else:
-            st.warning("ID non trovato nel database. Assicurati di aver inserito l'ID ISTAT corretto.")
+            st.warning("ID non trovato.")
             
     except Exception as e:
-        st.error(f"Errore di sistema: {e}")
+        st.error(f"Errore: {e}")
