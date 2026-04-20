@@ -118,17 +118,23 @@ def generate_pdf(riga, intro_text, struttura_text, mat_intro, mat_dettaglio, pro
     write_markdown_to_pdf(pdf, mat_intro)
     pdf.ln(5)
     write_markdown_to_pdf(pdf, mat_dettaglio)
+    
+    # NOVITÀ: Stampa esplicita del Profilo alla fine del Passo 1
+    pdf.ln(10)
+    pdf.set_font('Arial', 'B', 16)
+    pdf.set_text_color(0, 51, 153)
+    pdf.cell(0, 10, f"PROFILO STRATEGICO ASSEGNATO: {str(riga['T12_PROFILO_STRATEGICO']).strip().upper()}", 0, 1, 'L')
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 7, clean_for_pdf("A valle dell'analisi dei dati territoriali e della compilazione dei moduli tecnici, il Toolkit ha assegnato questa identità strategica al Comune. Le implicazioni e i percorsi conseguenti sono dettagliati nel Passo successivo."))
 
     # --- PASSO 2: RISULTATO DEI PERCORSI ---
     add_step_page(pdf, "PASSO 2: Risultato dei percorsi identificati")
     pdf.add_page()
-    # Scrive l'introduzione comune dei percorsi
     write_markdown_to_pdf(pdf, profilo_intro)
     pdf.ln(5)
-    # Scrive il testo specifico del Profilo (A, B, AB, ecc.)
     write_markdown_to_pdf(pdf, profilo_dettaglio)
 
-    # --- SPAZIO PER I DATI TECNICI (Azione 2) ---
     pdf.ln(10)
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(0, 51, 153)
@@ -171,7 +177,9 @@ if id_ricercato:
             except:
                 score = 0
             
-            profilo_codice = str(riga['T12_PROFILO_STRATEGICO']).strip()
+            # NOVITÀ: Pulizia del nome del profilo per trovare il file giusto (rimuove "Profilo " se presente nell'excel)
+            profilo_codice_raw = str(riga['T12_PROFILO_STRATEGICO']).strip()
+            profilo_codice = profilo_codice_raw.replace("Profilo ", "").replace("PROFILO ", "")
             
             if score < 3:
                 st.error("⚠️ Il Comune risulta in Livello 0. Action Plan non generabile.")
@@ -195,15 +203,13 @@ if id_ricercato:
                 mat_dettaglio_md = get_md(mat_file)
 
                 # Passo 2
-                profilo_intro_md = get_md("4-profilo_intro_it.md") # La nuova introduzione
+                profilo_intro_md = get_md("4-profilo_intro_it.md")
                 profilo_file = f"4-profilo_{profilo_codice}_it.md"
                 profilo_dettaglio_md = get_md(profilo_file)
 
-                # Testo tecnico (placeholder per i dati quantitativi)
-                testo_tecnico = "In questa sezione verranno inseriti i dati numerici sui consumi, LCOH e logistica."
+                testo_tecnico = "In questa sezione verranno inseriti i dati numerici su fabbisogno e generazione."
 
                 if st.button("🚀 GENERA PDF"):
-                    # Passiamo profilo_intro_md alla funzione
                     pdf_bytes = generate_pdf(riga, intro_md, struttura_md, mat_intro_md, mat_dettaglio_md, profilo_intro_md, profilo_dettaglio_md, testo_tecnico)
                     st.download_button(
                         label="⬇️ Scarica PDF",
