@@ -130,21 +130,21 @@ if id_ricercato:
         df.columns = df.columns.str.strip()
         res = df[df['ID_ISTAT'].astype(str).str.strip() == str(id_ricercato).strip()]
 
-if not res.empty:
-            riga = res.iloc[0]
+    if not res.empty:
+        riga = res.iloc[0]
                 
                 # Caricamento Blocchi Fissi
-            def get_md(filename):
-                if os.path.exists(filename):
-                    with open(filename, "r", encoding="utf-8") as f: return f.read()
-                return ""
+        def get_md(filename):
+            if os.path.exists(filename):
+                with open(filename, "r", encoding="utf-8") as f: return f.read()
+            return ""
 
-            intro_md = get_md("1-intro_it.md")
-            struttura_md = get_md("2-struttura_plan_it.md")
+        intro_md = get_md("1-intro_it.md")
+        struttura_md = get_md("2-struttura_plan_it.md")
 
         # LOGICA DINAMICA MATURITÀ
 
-            testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
+        testo_tecnico = f"MATURITA E PROFILO\n- Livello: {riga['T11_LIVELLO_MATURITA']}/18\n- Profilo: {riga['T12_PROFILO_STRATEGICO']}\n\nNOTE TECNICHE:\n{riga.get('T12_NOTE_SINERGIE', 'Analisi dei flussi energetici.')}"
 
             if st.button("🚀 GENERA PDF"):
                 pdf_bytes = generate_pdf(riga, intro_md, testo_tecnico)
