@@ -130,7 +130,7 @@ if id_ricercato:
         df.columns = df.columns.str.strip()
         res = df[df['ID_ISTAT'].astype(str).str.strip() == str(id_ricercato).strip()]
 
-    if not res.empty:
+if not res.empty:
             riga = res.iloc[0]
                 
                 # Caricamento Blocchi Fissi
