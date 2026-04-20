@@ -1,2 +1,3 @@
-# Profilo Strategico C: Nodo Logistico e di Infrastrutturazione
+RISULTATO: *Profilo Strategico C - Nodo Logistico e di Infrastrutturazione*  
+
 Il territorio comunale si configura come un nodo strategico per la logistica dell'idrogeno, situato lungo i corridoi di trasporto prioritari o in prossimità di infrastrutture di interscambio critiche. L'assegnazione del profilo C richiede lo sviluppo del Percorso C, mirato a valorizzare il ruolo del Comune come punto di transito, stoccaggio o distribuzione della molecola su scala sovra-comunale. Seguire questo percorso significa analizzare le connessioni con i corridoi TEN-T e con le dorsali energetiche internazionali, come il South H2 Corridor. La strategia è volta a implementare stazioni di rifornimento per il trasporto pesante o centri di stoccaggio che possano garantire la resilienza della rete energetica, posizionando il territorio come un elemento indispensabile per la fluidità del mercato transfrontaliero.
