@@ -25,7 +25,9 @@ from fpdf import FPDF
 # =============================================================================
 
 # Fallback: se non usi secrets.toml, incolla qui l'URL del foglio.
-SPREADSHEET_URL = ""
+#SPREADSHEET_URL = ""
+
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1AbCdEf.../edit#gid=0"
 
 LOGO = "logo_h2ready.png"
 FONT_DIR = "fonts"                       # opzionale: DejaVuSans.ttf / -Bold / -Oblique
