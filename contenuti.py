@@ -669,3 +669,72 @@ def file_attesi(livello, profilo):
     if profilo:
         attesi.append(f"4-profilo_{profilo}_it.md")
     return attesi
+
+def genera_sezione_hta(riga_comune, df_aziende):
+    """
+    Genera il testo dinamico in Markdown per la Sezione 2.1 (HTA & RED III)
+    riga_comune: la riga del foglio Google con le info generali del Comune
+    df_aziende: il DataFrame con le aziende filtrate per quel codice ISTAT
+    """
+    
+    # 1. PARTE TEORICA STATICA (Trattato HTA e RED III)
+    testo_introduttivo = """
+### 🏭 2.1 Mappatura della Domanda Industriale "Hard-to-Abate" e Normativa RED III
+
+#### Perché l'Idrogeno nei Settori "Hard-to-Abate" (HTA)?
+La transizione ecologica impone una gerarchia di intervento basata sulle leggi della termodinamica: laddove l'elettrificazione diretta è possibile (tramite pompe di calore, resistenze o induzione), essa rappresenta sempre la strada più efficiente e conveniente. Tuttavia, esistono comparti industriali definiti **Hard-to-Abate (HTA)** — come la siderurgia, la chimica, le raffinerie, le vetrerie e i cementifici — in cui l'elettrificazione incontra limiti fisici o chimici insuperabili:
+
+* **Requisiti di materia prima chimica (*feedstock*):** In settori come la chimica dei fertilizzanti o la raffinazione, la molecola di idrogeno partecipa direttamente alle reazioni chimiche (es. agente riducente per la fabbricazione dell'acciaio DRI o per la sintesi dell'ammoniaca). L'elettricità non può sostituire una molecola.
+* **Calore ad altissima temperatura (>800 - 1500°C):** Nei grandi forni fusori per il vetro o per la calcinazione del clinker, la densità di potenza richiesta e le caratteristiche della fiamma rendono l'elettrificazione totale complessa o rischiosa per gli impianti.
+* **Competitività e Meccanismo CBAM:** Per queste industrie, sostituire i combustibili fossili con l'idrogeno verde è essenziale per evitare le sanzioni del meccanismo europeo di addebitamento del carbonio alle frontiere (CBAM).
+
+#### Il Quadro Normativo RED III e gli Obblighi per l'Industria
+La Direttiva Europea sulla Promozione delle Energie Rinnovabili (**RED III**) introduce un vincolo di svolta: entro il 2030, almeno il **42% dell'idrogeno utilizzato nell'industria** dovrà provenire da fonti rinnovabili di origine non biologica (**RFNBO**), quota che salirà al **60% entro il 2035**. Le aziende HTA presenti sul territorio non avranno la facoltà di scegliere se decarbonizzare: per legge dovranno sostituire l'idrogeno grigio/fossile con idrogeno verde RFNBO.
+"""
+
+    # 2. CONTROLLO PRESENZA AZIENDE E CALCOLI DINAMICI
+    if df_aziende.empty or df_aziende['fabbisogno_ton'].sum() == 0:
+        testo_dinamico = """
+#### Analisi del Territorio Comunale
+Lo screening condotto sul tessuto industriale locale tramite il **Tool 2.1** non ha rilevato la presenza di impianti classificabili nei settori prioritari *Hard-to-Abate*. Ne consegue che sul territorio comunale non sussiste attualmente una domanda industriale diretta in grado di giustificare la realizzazione di infrastrutture dedicate all'idrogeno ad uso di processo. La strategia comunale dovrà prioritariamente orientarsi verso l'elettrificazione diretta delle utenze termiche a bassa e media temperatura e verso l'efficienza energetica.
+"""
+        return testo_introduttivo + testo_dinamico
+
+    # Se ci sono aziende, facciamo i calcoli fisici
+    totale_h2_ton = df_aziende['fabbisogno_ton'].sum()
+    n_aziende = len(df_aziende[df_aziende['fabbisogno_ton'] > 0])
+    
+    # Formula fisica: 1 kg H2 = 52 kWh el. -> 1 ton H2 = 52 MWh
+    mwh_elettrici_req = totale_h2_ton * 52
+    mwp_pv_req = mwh_elettrici_req / 1300  # 1300 MWh/MWp resa media Nord Italia
+    ettari_pv_req = mwp_pv_req * 1.3       # 1.3 ettari per MWp a terra
+    campi_calcio = int((ettari_pv_req * 10000) / 7140)
+
+    # Costruzione della tabella delle aziende in Markdown
+    righe_tabella = []
+    for _, az in df_aziende.iterrows():
+        if az['fabbisogno_ton'] > 0:
+            righe_tabella.append(
+                f"| **{az['nome']}** | `{az['ateco']}` | {az['desc_processo']} | {az['verdetto']} | {az['fabbisogno_ton']:,.1f} t/anno |"
+            )
+    tabella_md = "\n".join(righe_tabella)
+
+    testo_dinamico = f"""
+#### Mappatura delle Utenze e Fabbisogni Rilevati (Tool 2.1)
+Attraverso lo screening condotto sul territorio comunale, sono state individuate **{n_aziende} aziende idonee** che esprimono una domanda industriale complessiva di **{totale_h2_ton:,.1f} tonnellate/anno di idrogeno verde**.
+
+| Nome Azienda | Codice ATECO | Descrizione Processo & Temperatura | Verdetto Termodinamico | Fabbisogno Stimato |
+| :--- | :--- | :--- | :--- | :--- |
+{tabella_md}
+
+#### Considerazioni di Scala: "Reality Check" Territoriale
+Per comprendere l'impatto fisico e urbanistico di questa domanda, è necessario tradurre le tonnellate di idrogeno nel fabbisogno di energia elettrica e suolo necessari per produrlo in loco:
+
+* **Energia Elettrica Richiesta:** Produrre **{totale_h2_ton:,.1f} t/anno** di H₂ (considerando un consumo specifico dell'elettrolisi di $52 \\text{{ kWh/kg}}$) richiede circa **{mwh_elettrici_req:,.0f} MWh/anno** ({mwh_elettrici_req/1000:,.1f} GWh/anno) di elettricità 100% rinnovabile.
+* **Potenza Fotovoltaica Equivalente:** Se alimentato a fotovoltaico a terra, servirebbe un impianto dedicato di potenza pari a **{mwp_pv_req:,.1f} MWp**.
+* **Occupazione di Suolo:** Un parco fotovoltaico di questa taglia richiederebbe circa **{ettari_pv_req:,.0f} ettari di terreno** (pari a circa **{campi_calcio} campi da calcio**).
+
+> **💡 Implicazione Strategica per l'Amministrazione:** > L'estensione di suolo richiesta dimostra che il Comune non potrà coprire l'intero fabbisogno industriale con la sola produzione solare locale a chilometro zero. La strategia comunale dovrà quindi combinare la generazione locale su tetti/brownfield con l'importazione di molecole da reti di trasporto sovracomunali (*SoutH2 Corridor* / dorsali Snam).
+"""
+
+    return testo_introduttivo + testo_dinamico
