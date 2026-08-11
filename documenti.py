@@ -19,7 +19,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
-LOGO = "logo_h2ready.png"
+LOGO = "Interreg ITA-SLO logo CMYK colour.jpg"
 FONT_DIR = "fonts"
 BLU = (0, 51, 153)
 BLU_HEX = "003399"
