@@ -19,7 +19,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
-LOGO = "Interreg ITA-SLO logo CMYK colour.jpg"
+LOGO = "logo_h2ready.png"
 FONT_DIR = "fonts"
 BLU = (0, 51, 153)
 BLU_HEX = "003399"
@@ -202,7 +202,14 @@ def _pdf_tabella(pdf, dati):
         # esponente < 1: le colonne lunghe crescono, ma non schiacciano le altre
         lunghezze.append(max(massimo, 6) ** 0.65)
     totale = sum(lunghezze)
-    pesi = [max(l / totale, 0.08) for l in lunghezze]
+    pesi = [l / totale for l in lunghezze]
+
+    # nessuna colonna può essere così stretta da spezzare una parola dell'intestazione
+    utile = pdf.w - pdf.l_margin - pdf.r_margin
+    for j in range(n):
+        parola = max(str(dati[0][j]).split() or [""], key=len)
+        minimo = (len(parola) * 1.85 + 4) / utile
+        pesi[j] = max(pesi[j], min(minimo, 0.30))
     somma = sum(pesi)
     pesi = [p / somma for p in pesi]
 

@@ -155,7 +155,7 @@ PERCORSI = [
 ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T12_SCORE_A", "T12_SCORE_B", "T12_SCORE_C",
            "T21_N_AZIENDE_IDONEE", "T21_NOMI_AZIENDE", "T21_FABBISOGNO_H2_TON_ANNO",
-           "T21_ATECO_AZIENDE", "T21_FABBISOGNI_AZIENDE"}
+           "T21_ATECO_AZIENDE", "T21_FABBISOGNI_AZIENDE", "T21_FAMIGLIE_AZIENDE"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT"]
@@ -545,6 +545,10 @@ def costruisci_aziende(riga) -> list:
     if not is_vuoto(riga.get("T21_FABBISOGNI_AZIENDE")):
         fabb_paralleli = [v.strip() for v in
                           re.split(r"[;\n]+", str(riga["T21_FABBISOGNI_AZIENDE"]))]
+    fam_parallele = []
+    if not is_vuoto(riga.get("T21_FAMIGLIE_AZIENDE")):
+        fam_parallele = [v.strip() for v in
+                         re.split(r"[;\n]+", str(riga["T21_FAMIGLIE_AZIENDE"]))]
 
     aziende = []
     for i, voce in enumerate(voci):
@@ -570,8 +574,9 @@ def costruisci_aziende(riga) -> list:
             if valore is not None:
                 fabbisogno = valore
 
+        famiglia = fam_parallele[i] if i < len(fam_parallele) else ""
         aziende.append({"nome": nome.strip(" -"), "ateco": codice,
-                        "fabbisogno": fabbisogno})
+                        "fabbisogno": fabbisogno, "famiglia": famiglia})
     return aziende
 
 
@@ -666,8 +671,12 @@ def sezione_hta(riga) -> str:
                 "| --- | --- | --- | --- | --- |"]
         for a in aziende:
             codice = AT.normalizza(a["ateco"]) or "n.d."
-            processo = AT.descrizione(a["ateco"])
-            giudizio = AT.verdetto(a["ateco"])
+            dal_tool = AT.da_famiglia(a.get("famiglia"))
+            if dal_tool:
+                giudizio, processo = dal_tool[0], dal_tool[1]
+            else:
+                processo = AT.descrizione(a["ateco"])
+                giudizio = AT.verdetto(a["ateco"])
             if a["fabbisogno"] is None:
                 quantita = "n.d."
             else:
@@ -688,7 +697,8 @@ def sezione_hta(riga) -> str:
         # legenda dei verdetti effettivamente comparsi
         presenti = []
         for a in aziende:
-            v = AT.verdetto(a["ateco"])
+            dal_tool = AT.da_famiglia(a.get("famiglia"))
+            v = dal_tool[0] if dal_tool else AT.verdetto(a["ateco"])
             if v in AT.VERDETTI and v not in presenti:
                 presenti.append(v)
         if presenti:

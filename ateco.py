@@ -23,6 +23,68 @@ ALTA_TEMP = "Calore ad alta temperatura"
 MARGINALE = "Marginale"
 ELETTRIFICA = "Elettrificazione diretta"
 
+# -----------------------------------------------------------------------------
+# FAMIGLIE PROVENIENTI DAL TOOL 2.1
+# Il Tool 2.1 classifica ogni azienda in una "family" tenendo conto sia del codice
+# sia della descrizione del processo (per esempio distingue un'acciaieria DRI da
+# un forno elettrico ad arco). Quando il foglio riporta quel dato in
+# T21_FAMIGLIE_AZIENDE, l'Action Plan lo usa così com'è invece di riclassificare:
+# è il 2.1 la fonte di verità, questo modulo resta la rete di sicurezza.
+# -----------------------------------------------------------------------------
+
+FAMIGLIE = {
+    "feedstock": (FEEDSTOCK,
+                  "L'idrogeno entra come materia prima chimica, nella sintesi "
+                  "dell'ammoniaca o nell'idrotrattamento di raffineria: serve alla "
+                  "reazione, non al calore, e nessuna alternativa elettrica può "
+                  "sostituirlo."),
+    "dri": (FEEDSTOCK,
+            "Nella riduzione diretta del minerale di ferro l'idrogeno sostituisce il "
+            "carbonio come agente riducente, lasciando acqua al posto della CO2: è la "
+            "via principale per l'acciaio primario a zero emissioni."),
+    "glass": (ALTA_TEMP,
+              "I forni fusori del vetro lavorano in continuo attorno ai 1.500 °C: oltre "
+              "una certa taglia l'elettrificazione totale è limitata dalla durata degli "
+              "elettrodi e dalla densità di potenza."),
+    "calcination": (MARGINALE,
+                    "La calcinazione di cemento, calce e refrattari può usare idrogeno, "
+                    "ma compete con biometano e combustibili solidi secondari; inoltre "
+                    "gran parte delle emissioni è di processo e non si elimina cambiando "
+                    "il solo combustibile."),
+    "heattreat": (MARGINALE,
+                  "Trattamenti termici e rivestimenti metallici stanno fra i 500 e i "
+                  "1.200 °C: forni a induzione o a resistenza sono spesso più efficienti, "
+                  "e l'idrogeno si giustifica dove serve un'atmosfera chimica specifica."),
+    "borderline": (MARGINALE,
+                   "Processo termico a media temperatura in un settore non prioritario: "
+                   "va verificato caso per caso, ma di norma l'elettrificazione diretta "
+                   "resta preferibile."),
+    "cracking": (ELETTRIFICA,
+                 "Lo steam cracking genera idrogeno come sottoprodotto: non è un "
+                 "fabbisogno da pianificare ed è escluso dalle quote RED III."),
+    "smr": (ELETTRIFICA,
+            "Lo steam methane reforming produce idrogeno grigio: non è un consumatore da "
+            "convertire, ma un impianto da sostituire con l'elettrolisi."),
+    "byproduct": (ELETTRIFICA,
+                  "Qui l'idrogeno è un sottoprodotto industriale, spesso già recuperato "
+                  "in loco e non computabile ai fini delle quote RED III."),
+    "energy_waste": (ELETTRIFICA,
+                     "Vapore, generazione elettrica, edilizia e data center richiedono "
+                     "calore a bassa temperatura o sola elettricità: bruciare idrogeno "
+                     "qui è uno spreco termodinamico."),
+    "none": (ELETTRIFICA,
+             "Codice non prioritario o processo a bassa temperatura facilmente "
+             "elettrificabile."),
+}
+
+
+def da_famiglia(famiglia):
+    """Traduce la family del Tool 2.1 in (verdetto, descrizione). None se ignota."""
+    if not famiglia:
+        return None
+    return FAMIGLIE.get(str(famiglia).strip().lower())
+
+
 VERDETTI = {
     FEEDSTOCK: "**Idoneo** - l'idrogeno entra nella reazione chimica: nessuna "
                "alternativa elettrica è possibile.",
