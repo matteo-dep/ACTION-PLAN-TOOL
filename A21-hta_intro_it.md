@@ -1,0 +1,7 @@
+### Domanda industriale Hard-to-Abate (Tool 2.1)
+
+La transizione impone una gerarchia di intervento fondata sulla termodinamica: dove l'elettrificazione diretta è possibile, tramite pompe di calore, resistenze o induzione, essa resta sempre la strada più efficiente e conveniente. Esistono però comparti definiti **Hard-to-Abate** nei quali l'elettrificazione incontra limiti fisici o chimici insuperabili.
+
+Il primo caso è quello del **feedstock chimico**: nella sintesi dell'ammoniaca, nella raffinazione e nella riduzione diretta del minerale di ferro la molecola di idrogeno partecipa alla reazione, e l'elettricità non può sostituire una molecola. Il secondo è il **calore ad altissima temperatura**, oltre gli 800 °C e fino ai 1.500 °C dei forni fusori del vetro o della calcinazione del clinker, dove la densità di potenza e le caratteristiche della fiamma rendono l'elettrificazione totale complessa o rischiosa per gli impianti.
+
+A questi limiti tecnici si somma un vincolo normativo. La direttiva **RED III** impone che entro il 2030 almeno il 42% dell'idrogeno impiegato nell'industria provenga da fonti rinnovabili di origine non biologica (RFNBO), quota che sale al 60% entro il 2035. Per le imprese Hard-to-Abate la decarbonizzazione non è quindi una facoltà ma un obbligo di legge, e il meccanismo europeo di adeguamento del carbonio alle frontiere (CBAM) ne rafforza l'urgenza sul piano della competitività.

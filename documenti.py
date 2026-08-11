@@ -62,13 +62,29 @@ def blocchi_markdown(md: str):
         elif stripped.startswith("#"):
             yield ("h1", stripped.lstrip("#").strip())
         elif stripped.startswith(">"):
-            yield ("nota", stripped.lstrip(">").strip())
-        elif re.match(r"^([-*+]|\d+[.)])\s+", stripped):
-            marc = re.match(r"^([-*+]|\d+[.)])\s+", stripped).group(1)
-            testo = re.sub(r"^([-*+]|\d+[.)])\s+", "", stripped)
+            nota = []
+            while i < len(righe) and righe[i].strip().startswith(">"):
+                nota.append(righe[i].strip().lstrip(">").strip())
+                i += 1
+            yield ("nota", " ".join(p for p in nota if p))
+            continue
+        elif re.match(r"^([-*+]|\d{1,2}[.)])\s+", stripped):
+            marc = re.match(r"^([-*+]|\d{1,2}[.)])\s+", stripped).group(1)
+            testo = re.sub(r"^([-*+]|\d{1,2}[.)])\s+", "", stripped)
             yield ("elenco", (marc if marc not in "-*+" else "-", testo))
         else:
-            yield ("paragrafo", stripped)
+            paragrafo = [stripped]
+            i += 1
+            while i < len(righe):
+                seguente = righe[i].strip()
+                if (not seguente or seguente.startswith(("|", "#", ">"))
+                        or re.match(r"^([-*+]|\d{1,2}[.)])\s+", seguente)
+                        or re.fullmatch(r"-{3,}|_{3,}|\*{3,}", seguente)):
+                    break
+                paragrafo.append(seguente)
+                i += 1
+            yield ("paragrafo", " ".join(paragrafo))
+            continue
         i += 1
 
 
@@ -97,6 +113,11 @@ def pulisci(testo) -> str:
             "\u00b7": "-", "\u2192": "->", "\u2264": "<=", "\u2265": ">="}
     for a, b in sost.items():
         testo = testo.replace(a, b)
+    # emoji e simboli fuori dal latin-1: meglio toglierli che stampare "?"
+    testo = re.sub(
+        "[\U0001F000-\U0001FAFF\u2190-\u21FF\u2300-\u27BF\uFE0F\u2B00-\u2BFF]",
+        "", testo)
+    testo = re.sub(r" {2,}", " ", testo)
     return testo.encode("latin-1", "replace").decode("latin-1")
 
 
@@ -169,41 +190,49 @@ def _pdf_inline(pdf, testo, size, h):
 
 
 def _pdf_tabella(pdf, dati):
-    larghezza = pdf.w - pdf.l_margin - pdf.r_margin
+    """Tabella a larghezza adattiva: usa l'API table di fpdf2, che gestisce
+    il ritorno a capo nelle celle e l'interruzione di pagina."""
     n = max(len(r) for r in dati)
-    w = [larghezza * 0.60] + [(larghezza * 0.40) / max(n - 1, 1)] * (n - 1)
+    dati = [list(r) + [""] * (n - len(r)) for r in dati]
 
-    for i, riga in enumerate(dati):
-        testa = i == 0
-        pdf.font("B" if testa else "", 9.5)
-        if testa:
-            pdf.set_fill_color(*BLU)
-            pdf.set_text_color(255, 255, 255)
-        else:
-            pdf.set_fill_color(*((246, 248, 252) if i % 2 == 0 else (255, 255, 255)))
-            pdf.set_text_color(0, 0, 0)
+    # larghezza proporzionale alla lunghezza tipica del contenuto di ogni colonna
+    lunghezze = []
+    for j in range(n):
+        massimo = max(len(str(r[j])) for r in dati)
+        # esponente < 1: le colonne lunghe crescono, ma non schiacciano le altre
+        lunghezze.append(max(massimo, 6) ** 0.65)
+    totale = sum(lunghezze)
+    pesi = [max(l / totale, 0.08) for l in lunghezze]
+    somma = sum(pesi)
+    pesi = [p / somma for p in pesi]
 
-        alt = 7
-        for j in range(n):
-            testo = pdf.txt(riga[j] if j < len(riga) else "")
-            if pdf.get_string_width(testo) > w[j] - 4:
-                alt = 11
-        if pdf.get_y() + alt > pdf.h - 25:
-            pdf.add_page()
-
-        for j in range(n):
-            testo = pdf.txt(riga[j] if j < len(riga) else "")
-            allineamento = "L" if j == 0 else "R"
-            if alt > 7 and pdf.get_string_width(testo) > w[j] - 4:
-                x, y = pdf.get_x(), pdf.get_y()
-                pdf.multi_cell(w[j], alt / 2, testo, border=1, fill=True,
-                               align=allineamento, max_line_height=alt / 2)
-                pdf.set_xy(x + w[j], y)
-            else:
-                pdf.cell(w[j], alt, testo, border=1, fill=True, align=allineamento)
-        pdf.ln(alt)
+    pdf.font("", 9)
+    pdf.set_draw_color(190, 198, 214)
+    with pdf.table(col_widths=tuple(pesi),
+                   text_align=tuple("LEFT" if j == 0 else
+                                    ("RIGHT" if n <= 3 else "LEFT")
+                                    for j in range(n)),
+                   line_height=5,
+                   padding=1.6,
+                   headings_style=_intestazione_tabella(pdf),
+                   cell_fill_color=(246, 248, 252),
+                   cell_fill_mode="ROWS") as tabella:
+        for i, riga in enumerate(dati):
+            fila = tabella.row()
+            for cella in riga:
+                fila.cell(pdf.txt(_senza_grassetto(cella)))
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
+
+
+def _senza_grassetto(testo) -> str:
+    """Nelle celle il markdown non viene interpretato: tolgo i doppi asterischi."""
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", str(testo))
+
+
+def _intestazione_tabella(pdf):
+    from fpdf.fonts import FontFace
+    return FontFace(emphasis="BOLD", color=(255, 255, 255), fill_color=BLU)
 
 
 def scrivi_markdown_pdf(pdf, md: str):
@@ -384,15 +413,21 @@ def scrivi_markdown_docx(doc, md: str):
             tabella = doc.add_table(rows=0, cols=n)
             tabella.style = "Table Grid"
             tabella.alignment = WD_TABLE_ALIGNMENT.CENTER
-            larghezze = [Cm(10.0)] + [Cm(6.0 / max(n - 1, 1))] * (n - 1)
+            utile = 16.0
+            lung = []
+            for j in range(n):
+                massimo = max(len(str(r[j])) if j < len(r) else 0 for r in contenuto)
+                lung.append(max(massimo, 6))
+            somma = sum(lung)
+            larghezze = [Cm(max(utile * l / somma, 1.6)) for l in lung]
             for i, riga in enumerate(contenuto):
                 celle = tabella.add_row().cells
                 for j in range(n):
-                    testo = riga[j] if j < len(riga) else ""
+                    testo = _senza_grassetto(riga[j] if j < len(riga) else "")
                     cella = celle[j]
                     cella.width = larghezze[j]
                     p = cella.paragraphs[0]
-                    if j:
+                    if j and n <= 3:
                         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     run = p.add_run(testo)
                     run.font.size = Pt(9.5)

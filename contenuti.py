@@ -11,6 +11,8 @@ import unicodedata
 
 import pandas as pd
 
+import ateco as AT
+
 # =============================================================================
 # COLONNE CHIAVE
 # =============================================================================
@@ -34,6 +36,55 @@ NOMI_PROFILO = {
     "C": "Transito - il Comune si colloca su direttrici logistiche rilevanti",
 }
 
+# -----------------------------------------------------------------------------
+# PARAMETRI DI RIFERIMENTO DEL PERCORSO A
+# Fonte: "Modelli di Business per l'utilizzo dell'H2 e lo sviluppo della Filiera
+# in Italia" (2024) e "Camion a idrogeno" (Roland Berger, 2021).
+# Sono i valori su cui si tarano i giudizi qualitativi: modificarli qui.
+# -----------------------------------------------------------------------------
+
+# Flotta minima ritenuta sostenibile: 10 bus x 26 kg/giorno x 300 giorni ~ 78 t/anno
+SOGLIA_MASSA_CRITICA_TON = 78.0
+# Sotto questa soglia la domanda è troppo frammentata per un progetto autonomo
+SOGLIA_DOMANDA_MINIMA_TON = 25.0
+
+CONSUMO_BUS_KG_GIORNO = 26.0        # bus urbano da 12 m, 250 km/giorno
+GIORNI_OPERATIVI = 300              # giorni di servizio in un anno
+EFFICIENZA_H2_KM_KG = 11.4          # mezzo pesante stradale
+EFFICIENZA_DIESEL_KM_LITRO = 3.5    # mezzo pesante stradale
+EMISSIONI_DIESEL_KG_LITRO = 2.7     # kgCO2 per litro di gasolio
+
+# 1 kg di H2 sostituisce EFFICIENZA_H2_KM_KG / EFFICIENZA_DIESEL_KM_LITRO litri
+LITRI_DIESEL_PER_KG_H2 = EFFICIENZA_H2_KM_KG / EFFICIENZA_DIESEL_KM_LITRO
+CO2_EVITATA_KG_PER_KG_H2 = LITRI_DIESEL_PER_KG_H2 * EMISSIONI_DIESEL_KG_LITRO
+
+# Reality check: quanta energia e quanto suolo serve per produrre l'idrogeno
+CONSUMO_ELETTROLISI_KWH_KG = 52.0   # consumo specifico di sistema
+RESA_PV_KWH_KWP = 1250.0            # producibilità media in Friuli Venezia Giulia
+SUPERFICIE_PV_HA_MWP = 1.3          # fotovoltaico a terra
+SUPERFICIE_CAMPO_CALCIO_MQ = 7140.0
+
+NICCHIE = {
+    "T23_FLAG_RIFUGI":
+        "rifugi e utenze isolate, dove l'idrogeno compete con il generatore diesel "
+        "e con la logistica di rifornimento in quota",
+    "T23_FLAG_MEZZI_CRITICI":
+        "mezzi di emergenza e protezione civile, per i quali la continuità operativa "
+        "conta più del costo del carburante",
+    "T23_FLAG_COLD_STORAGE":
+        "logistica del freddo e movimentazione in magazzino, dove i carrelli a celle a "
+        "combustibile evitano la sostituzione delle batterie fra i turni",
+    "T23_FLAG_TRENI":
+        "trasporto ferroviario su tratte non elettrificate, alternativa all'elettrificazione "
+        "quando i volumi di traffico non la giustificano",
+    "T23_FLAG_PORTI_AEROPORTI":
+        "movimentazione portuale o aeroportuale, con mezzi a ciclo continuo e rifornimento "
+        "concentrato in pochi punti",
+    "T23_FLAG_DEPURATORI":
+        "impianti di depurazione, dove il consumo per aerazione è costante e prevedibile "
+        "e può essere accoppiato a produzione locale",
+}
+
 # =============================================================================
 # STRUTTURA DEL PASSO 2
 # =============================================================================
@@ -43,8 +94,6 @@ PERCORSI = [
         "codice": "A",
         "titolo": "Percorso A - Domanda di idrogeno",
         "blocchi": [
-            ("Domanda industriale (Tool 2.1)", [
-                "T21_N_AZIENDE_IDONEE", "T21_NOMI_AZIENDE", "T21_FABBISOGNO_H2_TON_ANNO"]),
             ("Flotte e mobilità (Tool 2.2)", [
                 "T22_N_VEICOLI_ANALIZZATI", "T22_ESITO_PREVALENTE", "T22_BEV_FATTIBILE",
                 "T22_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_ELETTRICO_MWH_ANNO",
@@ -102,8 +151,11 @@ PERCORSI = [
     },
 ]
 
+# T21_*: già trattate per esteso nella sezione 2.1, non si ripetono in tabella
 ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
-           "T12_SCORE_A", "T12_SCORE_B", "T12_SCORE_C"}
+           "T12_SCORE_A", "T12_SCORE_B", "T12_SCORE_C",
+           "T21_N_AZIENDE_IDONEE", "T21_NOMI_AZIENDE", "T21_FABBISOGNO_H2_TON_ANNO",
+           "T21_ATECO_AZIENDE", "T21_FABBISOGNI_AZIENDE"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT"]
@@ -349,8 +401,39 @@ def slug(testo: str) -> str:
 def leggi_md(filename: str) -> str:
     if os.path.exists(filename):
         with open(filename, "r", encoding="utf-8") as f:
-            return f.read()
+            return ripulisci_md(f.read())
     return f"> *[Contenuto non disponibile: manca il file `{filename}`]*"
+
+
+def ripulisci_md(testo: str) -> str:
+    """Toglie dai .md i residui di esportazione: marcatori di citazione e LaTeX."""
+    testo = re.sub(r"\[cite_start\]", "", testo)
+    testo = re.sub(r"\[cite:[^\]]*\]", "", testo)
+    testo = re.sub(r"\$+\\?text\{([^}]*)\}\$*", r"\1", testo)
+    testo = re.sub(r"\$([^$]*)\$", r"\1", testo)
+    testo = re.sub(r"[ \t]+([.,;:])", r"\1", testo)
+    return testo.strip()
+
+
+def applica_valori(testo: str, valori: dict) -> str:
+    """Sostituisce i segnaposto {nome} con i valori calcolati.
+
+    I segnaposto non previsti restano nel testo, così un refuso in un .md si vede
+    subito nel documento invece di far fallire la generazione.
+    """
+    def sostituisci(match):
+        chiave = match.group(1).strip()
+        if chiave in valori:
+            return str(valori[chiave])
+        return match.group(0)
+    return re.sub(r"\{([A-Za-z0-9_]+)\}", sostituisci, testo)
+
+
+def testo_da_template(filename: str, valori: dict, predefinito: str = "") -> str:
+    """Carica un .md e ne compila i segnaposto; se manca usa il testo predefinito."""
+    if os.path.exists(filename):
+        return applica_valori(leggi_md(filename), valori)
+    return applica_valori(predefinito, valori)
 
 
 def totale(riga, colonne):
@@ -384,9 +467,15 @@ def testo_profilo(profilo: str, punteggi: dict) -> str:
 
 
 def testo_passo2(riga) -> str:
-    out = ["# Sintesi dei risultati tecnici",
-           "I valori derivano dai questionari e dagli strumenti di calcolo del Toolkit "
-           "H2READY. I campi non compilati non compaiono nelle tabelle.", ""]
+    intro = ""
+    for nome in ("5-percorsi_intro_it.md", "Intro Percorsi.md"):
+        if os.path.exists(nome):
+            intro = leggi_md(nome)
+            break
+    out = [intro, ""] if intro else []
+    out += ["# Sintesi dei risultati tecnici",
+            "I valori derivano dai questionari e dagli strumenti di calcolo del Toolkit "
+            "H2READY. I campi non compilati non compaiono nelle tabelle.", ""]
     conteggio = 0
 
     for percorso in PERCORSI:
@@ -430,26 +519,427 @@ def testo_passo2(riga) -> str:
     return "\n".join(out)
 
 
+def costruisci_aziende(riga) -> list:
+    """Ricava l'elenco delle aziende dal foglio, in qualunque forma sia scritto.
+
+    Formati riconosciuti in T21_NOMI_AZIENDE (separatore ';' oppure a capo):
+        Ferriere Isontine S.p.A.
+        Ferriere Isontine S.p.A. (24.10)
+        Ferriere Isontine S.p.A. | 24.10 | 3200
+    In alternativa, se il foglio contiene le colonne parallele
+    T21_ATECO_AZIENDE e T21_FABBISOGNI_AZIENDE (liste separate da ';'),
+    queste hanno la precedenza.
+
+    Restituisce una lista di dizionari con nome, ateco, fabbisogno (t/anno o None).
+    """
+    grezzo = riga.get("T21_NOMI_AZIENDE")
+    if is_vuoto(grezzo):
+        return []
+
+    voci = [v.strip() for v in re.split(r"[;\n]+", str(grezzo)) if v.strip()]
+    ateco_paralleli = []
+    fabb_paralleli = []
+    if not is_vuoto(riga.get("T21_ATECO_AZIENDE")):
+        ateco_paralleli = [v.strip() for v in
+                           re.split(r"[;\n]+", str(riga["T21_ATECO_AZIENDE"]))]
+    if not is_vuoto(riga.get("T21_FABBISOGNI_AZIENDE")):
+        fabb_paralleli = [v.strip() for v in
+                          re.split(r"[;\n]+", str(riga["T21_FABBISOGNI_AZIENDE"]))]
+
+    aziende = []
+    for i, voce in enumerate(voci):
+        nome, codice, fabbisogno = voce, "", None
+
+        if "|" in voce:
+            pezzi = [p.strip() for p in voce.split("|")]
+            nome = pezzi[0]
+            if len(pezzi) > 1:
+                codice = pezzi[1]
+            if len(pezzi) > 2:
+                fabbisogno = numero(pezzi[2])
+        else:
+            trovato = re.search(r"[\(\[]\s*([0-9]{2}[.,]?[0-9.,]*)\s*[\)\]]", voce)
+            if trovato:
+                codice = trovato.group(1)
+                nome = voce[: trovato.start()].strip()
+
+        if i < len(ateco_paralleli) and ateco_paralleli[i]:
+            codice = ateco_paralleli[i]
+        if i < len(fabb_paralleli):
+            valore = numero(fabb_paralleli[i])
+            if valore is not None:
+                fabbisogno = valore
+
+        aziende.append({"nome": nome.strip(" -"), "ateco": codice,
+                        "fabbisogno": fabbisogno})
+    return aziende
+
+
+def ripartisci_fabbisogno(aziende: list, totale_ton):
+    """Se manca il fabbisogno per singola azienda lo stima pro quota.
+
+    La ripartizione è pesata sull'intensità di idrogeno tipica del settore ATECO.
+    Restituisce True se almeno un valore è stato stimato anziché rilevato.
+    """
+    if not aziende or not totale_ton:
+        return False
+    noti = sum(a["fabbisogno"] for a in aziende if a["fabbisogno"] is not None)
+    mancanti = [a for a in aziende if a["fabbisogno"] is None]
+    if not mancanti:
+        return False
+
+    residuo = max(totale_ton - noti, 0.0)
+    pesi = [AT.peso(a["ateco"]) for a in mancanti]
+    somma = sum(pesi) or len(mancanti)
+    for azienda, p in zip(mancanti, pesi):
+        azienda["fabbisogno"] = residuo * p / somma
+        azienda["stimato"] = True
+    return True
+
+
+TESTO_HTA_PREDEFINITO = """### Domanda industriale Hard-to-Abate (Tool 2.1)
+
+La transizione impone una gerarchia di intervento fondata sulla termodinamica:
+dove l'elettrificazione diretta è possibile, tramite pompe di calore, resistenze o
+induzione, essa resta sempre la strada più efficiente. Esistono però comparti
+definiti **Hard-to-Abate** nei quali l'elettrificazione incontra limiti fisici o
+chimici insuperabili: settori in cui la molecola di idrogeno partecipa direttamente
+alla reazione, come la sintesi dell'ammoniaca o la riduzione diretta del minerale
+di ferro, e processi che richiedono calore oltre gli 800 °C, come i forni fusori
+del vetro o la calcinazione del clinker.
+
+A questo si aggiunge un vincolo normativo: la direttiva **RED III** impone che
+entro il 2030 almeno il 42% dell'idrogeno impiegato nell'industria provenga da
+fonti rinnovabili di origine non biologica (RFNBO), quota che sale al 60% entro il
+2035. Per le imprese Hard-to-Abate la decarbonizzazione non è una scelta ma un
+obbligo di legge, e il meccanismo CBAM ne rafforza l'urgenza sul piano competitivo.
+"""
+
+TESTO_REALITY_CHECK_PREDEFINITO = """#### Che cosa significa produrre questa quantità
+
+Tradurre le tonnellate di idrogeno in energia e suolo serve a fissare l'ordine di
+grandezza dell'impegno richiesto al territorio.
+
+| Grandezza | Valore |
+| --- | --- |
+| Idrogeno richiesto dall'industria | {h2_ton} t/anno |
+| Energia elettrica necessaria | {mwh} MWh/anno ({gwh} GWh/anno) |
+| Potenza fotovoltaica equivalente | {mwp} MWp |
+| Superficie a terra occupata | {ettari} ettari, pari a circa {campi} campi da calcio |
+
+> Calcolo condotto con un consumo specifico di elettrolisi di {kwh_kg} kWh per kg
+> di idrogeno, una producibilità fotovoltaica di {resa} kWh per kWp installato e
+> un'occupazione di {ha_mwp} ettari per MWp a terra.
+
+{giudizio_suolo}
+"""
+
+
+def sezione_hta(riga) -> str:
+    """Sezione 2.1: mappatura delle utenze industriali Hard-to-Abate."""
+    ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
+    aziende = costruisci_aziende(riga)
+
+    testo = testo_da_template("A21-hta_intro_it.md", {}, TESTO_HTA_PREDEFINITO)
+    out = [testo, ""]
+
+    if not aziende and not ind:
+        out.append("Lo screening del tessuto industriale locale non ha rilevato impianti "
+                   "classificabili nei settori prioritari Hard-to-Abate. Sul territorio "
+                   "comunale non sussiste quindi una domanda industriale diretta capace "
+                   "di giustificare da sola un'infrastruttura dedicata: la strategia va "
+                   "orientata all'elettrificazione delle utenze termiche a bassa e media "
+                   "temperatura e all'efficienza energetica, riservando l'idrogeno agli "
+                   "altri percorsi.")
+        return "\n".join(out)
+
+    stimato = ripartisci_fabbisogno(aziende, ind)
+
+    if aziende:
+        out.append(f"Lo screening ha individuato "
+                   f"{'una sola azienda idonea' if len(aziende) == 1 else str(len(aziende)) + ' aziende idonee'} "
+                   "sul territorio comunale. Per ciascuna, il codice ATECO determina il "
+                   "processo produttivo e quindi se l'impiego di idrogeno sia "
+                   "tecnicamente fondato o meno.")
+        out.append("")
+        out += ["| Azienda | ATECO | Processo | Valutazione | Fabbisogno |",
+                "| --- | --- | --- | --- | --- |"]
+        for a in aziende:
+            codice = AT.normalizza(a["ateco"]) or "n.d."
+            processo = AT.descrizione(a["ateco"])
+            giudizio = AT.verdetto(a["ateco"])
+            if a["fabbisogno"] is None:
+                quantita = "n.d."
+            else:
+                quantita = f"{formatta_numero(a['fabbisogno'])} t/anno"
+                if a.get("stimato"):
+                    quantita += " *"
+            out.append(f"| {a['nome']} | {codice} | {processo} | {giudizio} | {quantita} |")
+        out.append("")
+
+        if stimato:
+            out.append("> I valori contrassegnati con l'asterisco sono una ripartizione "
+                       "indicativa del fabbisogno complessivo fra le aziende individuate, "
+                       "pesata sull'intensità di idrogeno tipica di ciascun settore. Non "
+                       "sostituiscono la rilevazione puntuale presso le singole imprese, "
+                       "che resta il passo successivo.")
+            out.append("")
+
+        # legenda dei verdetti effettivamente comparsi
+        presenti = []
+        for a in aziende:
+            v = AT.verdetto(a["ateco"])
+            if v in AT.VERDETTI and v not in presenti:
+                presenti.append(v)
+        if presenti:
+            out.append("Criteri di valutazione applicati:")
+            out += [f"- **{v}** - {AT.VERDETTI[v].replace('**', '')}" for v in presenti]
+            out.append("")
+
+    # --- reality check su energia e suolo
+    if ind:
+        mwh = ind * 1000 * CONSUMO_ELETTROLISI_KWH_KG / 1000
+        mwp = mwh * 1000 / RESA_PV_KWH_KWP / 1000
+        ettari = mwp * SUPERFICIE_PV_HA_MWP
+        campi = ettari * 10000 / SUPERFICIE_CAMPO_CALCIO_MQ
+
+        idonee = numero(riga.get("T25_AREE_IDONEE_MQ"))
+        if idonee:
+            quota = ettari * 10000 / idonee * 100
+            if quota > 100:
+                giudizio = (f"La superficie necessaria eccede le aree idonee censite sul "
+                            f"territorio comunale: il fabbisogno industriale **non è "
+                            f"copribile con la sola produzione locale a terra**. La "
+                            "strategia dovrà combinare generazione su coperture e aree "
+                            "dismesse con l'approvvigionamento da reti sovracomunali.")
+            elif quota > 30:
+                giudizio = (f"L'impianto occuperebbe circa il {formatta_numero(quota)}% "
+                            "delle aree idonee censite: una quota rilevante, che impone "
+                            "di valutare il consumo di suolo rispetto agli altri usi "
+                            "possibili prima di procedere.")
+            else:
+                giudizio = (f"L'impianto occuperebbe circa il {formatta_numero(quota)}% "
+                            "delle aree idonee censite: il territorio dispone del margine "
+                            "necessario, e la scelta si sposta sulla qualità delle aree "
+                            "più che sulla loro estensione.")
+        else:
+            giudizio = ("L'estensione richiesta mostra che difficilmente il fabbisogno "
+                        "industriale sarà coperto dalla sola produzione locale a terra: "
+                        "la pianificazione dovrà combinare generazione su coperture e "
+                        "aree dismesse con l'approvvigionamento da reti sovracomunali, "
+                        "in particolare il SoutH2 Corridor e le dorsali di trasporto.")
+
+        valori = {
+            "h2_ton": formatta_numero(ind),
+            "mwh": formatta_numero(mwh),
+            "gwh": formatta_numero(mwh / 1000),
+            "mwp": formatta_numero(mwp),
+            "ettari": formatta_numero(ettari),
+            "campi": formatta_numero(round(campi)),
+            "kwh_kg": formatta_numero(CONSUMO_ELETTROLISI_KWH_KG),
+            "resa": formatta_numero(RESA_PV_KWH_KWP),
+            "ha_mwp": formatta_numero(SUPERFICIE_PV_HA_MWP),
+            "giudizio_suolo": giudizio,
+        }
+        out.append(testo_da_template("A21-realitycheck_it.md", valori,
+                                     TESTO_REALITY_CHECK_PREDEFINITO))
+
+    return "\n".join(out)
+
+
+def testo_percorso_a(riga) -> str:
+    """Lettura discorsiva del percorso A - domanda di idrogeno."""
+    ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
+    flotta = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
+    dom = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_H2_TON_ANNO"])
+    out = []
+
+    # --- 1. quadro d'insieme e equivalenze
+    if dom:
+        kg_giorno = dom * 1000 / GIORNI_OPERATIVI
+        bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
+        litri = dom * 1000 * LITRI_DIESEL_PER_KG_H2
+        co2 = dom * CO2_EVITATA_KG_PER_KG_H2      # t/anno (kg per kg = t per t)
+        out.append(f"La domanda potenziale complessiva individuata sul territorio comunale "
+                   f"ammonta a **{formatta_numero(dom)} tonnellate di idrogeno all'anno**, "
+                   f"pari a circa {formatta_numero(kg_giorno)} kg al giorno su "
+                   f"{GIORNI_OPERATIVI} giorni operativi.")
+        out.append("")
+        out.append("### Ordini di grandezza")
+        out += ["| Riferimento | Valore |", "| --- | --- |",
+                f"| Domanda complessiva | {formatta_numero(dom)} t/anno |",
+                f"| Erogazione media giornaliera | {formatta_numero(kg_giorno)} kg/giorno |",
+                f"| Equivalente in autobus urbani alimentabili | {formatta_numero(bus_eq)} mezzi |",
+                f"| Gasolio sostituito | {formatta_numero(litri)} litri/anno |",
+                f"| Emissioni evitate allo scarico | {formatta_numero(co2)} tCO2/anno |", ""]
+        out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
+                   f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
+                   f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
+                   f"idrogeno contro {formatta_numero(EFFICIENZA_DIESEL_KM_LITRO)} km/litro "
+                   "per il corrispondente diesel.")
+        out.append("")
+
+        # --- 2. giudizio sulla massa critica
+        out.append("### Massa critica")
+        if dom >= SOGLIA_MASSA_CRITICA_TON:
+            out.append(f"Il volume supera le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} "
+                       "t/anno assunte come soglia di sostenibilità economica per un "
+                       "progetto di conversione autonomo, corrispondenti a una flotta di "
+                       "una decina di mezzi pesanti in servizio continuo. **La domanda "
+                       "locale è di per sé sufficiente** a giustificare un'infrastruttura "
+                       "dedicata: la questione diventa la sua contrattualizzazione, non "
+                       "la sua esistenza.")
+        elif dom >= SOGLIA_DOMANDA_MINIMA_TON:
+            out.append(f"Il volume si colloca fra le {formatta_numero(SOGLIA_DOMANDA_MINIMA_TON)} "
+                       f"e le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno: **una "
+                       "fascia intermedia**, in cui un progetto autonomo resta fragile ma "
+                       "l'aggregazione con utenze di Comuni limitrofi, o con il traffico "
+                       "di transito, può portare rapidamente il bacino sopra la soglia di "
+                       "sostenibilità. È la situazione in cui la cooperazione "
+                       "sovracomunale produce il maggior beneficio marginale.")
+        else:
+            out.append(f"Il volume resta sotto le {formatta_numero(SOGLIA_DOMANDA_MINIMA_TON)} "
+                       "t/anno: **la domanda locale non basta** a sostenere una filiera "
+                       "dedicata. Questo non esclude l'idrogeno dal futuro del Comune, ma "
+                       "sposta il baricentro dell'azione: nel breve periodo conviene "
+                       "puntare su una fornitura esterna per usi dimostrativi, e nel medio "
+                       "periodo lavorare sull'aggregazione della domanda a scala d'ambito.")
+        out.append("")
+    else:
+        out.append("Per questo Comune non è stato quantificato un fabbisogno di idrogeno. "
+                   "L'analisi dei percorsi resta parziale finché i questionari sulla domanda "
+                   "industriale e sulle flotte non vengono completati.")
+        out.append("")
+
+    # --- 3. composizione della domanda
+    if ind and flotta:
+        quota_ind = ind / (ind + flotta) * 100
+        out.append("### Composizione della domanda")
+        out.append(f"Il comparto produttivo pesa per il {formatta_numero(quota_ind)}% del "
+                   f"totale ({formatta_numero(ind)} t/anno), la flotta per il "
+                   f"{formatta_numero(100 - quota_ind)}% ({formatta_numero(flotta)} t/anno).")
+        if quota_ind >= 70:
+            out.append("La domanda è **trainata dall'industria**: il progetto va costruito "
+                       "attorno agli utilizzatori privati, con il Comune nel ruolo di "
+                       "facilitatore autorizzativo e di garante del percorso partecipativo, "
+                       "più che di investitore diretto.")
+        elif quota_ind <= 30:
+            out.append("La domanda è **trainata dalla flotta pubblica**: il Comune ha "
+                       "controllo diretto sull'utenza principale, quindi può impegnare "
+                       "volumi certi in fase di gara. È la configurazione che rende più "
+                       "semplice la bancabilità, perché elimina il rischio di mercato.")
+        else:
+            out.append("Domanda pubblica e privata si equivalgono: la configurazione più "
+                       "adatta è un accordo di programma che vincoli entrambe le componenti "
+                       "prima dell'investimento infrastrutturale.")
+        out.append("")
+
+    # --- 4. comparto industriale (Tool 2.1)
+    industriale = sezione_hta(riga)
+    if industriale:
+        out.append(industriale)
+        out.append("")
+
+    # --- 4bis. concentrazione del rischio
+    n_az = numero(riga.get("T21_N_AZIENDE_IDONEE")) or len(costruisci_aziende(riga))
+    if n_az:
+        if n_az == 1:
+            out.append("La presenza di un solo utilizzatore industriale concentra tutto "
+                       "il rischio di mercato su una controparte: prima di qualunque "
+                       "investimento serve un impegno contrattuale di lungo periodo, "
+                       "oppure l'individuazione di utenze alternative.")
+            out.append("")
+        elif n_az >= 3:
+            out.append("La pluralità di utilizzatori distribuisce il rischio e rende "
+                       "credibile un contratto di fornitura aggregato. Il passo "
+                       "successivo è verificare la contiguità territoriale delle "
+                       "aziende, che determina se convenga una rete locale o un "
+                       "rifornimento su strada.")
+            out.append("")
+
+    # --- 5. flotte
+    esito = riga.get("T22_ESITO_PREVALENTE")
+    n_veicoli = numero(riga.get("T22_N_VEICOLI_ANALIZZATI"))
+    delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
+    bev = riga.get("T22_BEV_FATTIBILE")
+    if n_veicoli or not is_vuoto(esito):
+        out.append("### Flotte e mobilità")
+        if n_veicoli:
+            out.append(f"L'analisi ha riguardato {formatta_numero(n_veicoli)} veicoli.")
+        if not is_vuoto(esito):
+            out.append(f"L'esito prevalente è: *{str(esito).strip()}*.")
+        if bev is not None and not is_vuoto(bev):
+            if vero(bev):
+                out.append("Per una parte dei mezzi **l'alternativa elettrica a batteria "
+                           "risulta praticabile**. L'idrogeno va quindi riservato ai "
+                           "segmenti in cui autonomia, tempi di rifornimento o carichi "
+                           "rendono la batteria inadeguata: destinarlo a usi che la "
+                           "batteria copre meglio peggiora sia i costi sia il bilancio "
+                           "energetico complessivo.")
+            else:
+                out.append("L'alternativa elettrica a batteria non risulta praticabile sui "
+                           "mezzi analizzati: **l'idrogeno è l'unica opzione a zero "
+                           "emissioni allo scarico** per questo segmento di flotta, il che "
+                           "rafforza la solidità del caso d'uso.")
+        if delta_tco is not None:
+            if delta_tco > 0:
+                out.append(f"Il costo totale di possesso resta superiore a quello dei mezzi "
+                           f"convenzionali di Euro {formatta_numero(delta_tco)} sull'intero "
+                           "ciclo di vita: il divario va colmato con contributi in conto "
+                           "capitale, e va monitorato perché si riduce con la discesa dei "
+                           "costi di produzione dell'idrogeno.")
+            else:
+                out.append(f"Il costo totale di possesso risulta **inferiore** a quello dei "
+                           f"mezzi convenzionali di Euro {formatta_numero(abs(delta_tco))} "
+                           "sul ciclo di vita: la conversione si regge senza contributo, "
+                           "purché il prezzo dell'idrogeno alla pompa rimanga entro le "
+                           "ipotesi assunte.")
+        out.append("")
+
+    # --- 6. usi di nicchia
+    attive = [NICCHIE[c] for c in NICCHIE if c in riga.index and vero(riga[c])]
+    if attive:
+        out.append("### Usi di nicchia")
+        out.append("Il territorio presenta impieghi specifici in cui l'idrogeno compete su "
+                   "requisiti diversi dal solo costo:")
+        out += [f"- {a}" for a in attive]
+        out.append("")
+        out.append("Questi impieghi hanno volumi contenuti ma alto valore dimostrativo: "
+                   "sono i candidati naturali per la prima fase, perché rendono visibile "
+                   "la tecnologia a costi contenuti e costruiscono consenso.")
+        out.append("")
+
+    # --- 7. fabbisogno termico
+    termico = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
+    ottimale = riga.get("T24_SOLUZIONE_OTTIMALE")
+    pulita = riga.get("T24_SOLUZIONE_PIU_PULITA")
+    if termico or not is_vuoto(ottimale):
+        out.append("### Fabbisogno termico degli edifici pubblici")
+        if termico:
+            out.append(f"Il fabbisogno termico rilevato è di {formatta_numero(termico)} "
+                       "kWh/anno.")
+        if not is_vuoto(ottimale) and not is_vuoto(pulita):
+            if str(ottimale).strip().lower() == str(pulita).strip().lower():
+                out.append(f"La soluzione ottimale coincide con quella a minori emissioni "
+                           f"(*{str(ottimale).strip()}*): non vi è conflitto fra convenienza "
+                           "economica e obiettivo ambientale.")
+            else:
+                out.append(f"La soluzione economicamente ottimale (*{str(ottimale).strip()}*) "
+                           f"non coincide con quella a minori emissioni "
+                           f"(*{str(pulita).strip()}*). È una scelta politica prima che "
+                           "tecnica: va esplicitata nel piano, indicando quale criterio "
+                           "prevale e perché.")
+        elif not is_vuoto(ottimale):
+            out.append(f"La soluzione individuata come ottimale è: *{str(ottimale).strip()}*.")
+        out.append("")
+
+    return "\n".join(out).strip()
+
+
 def commento_percorso(riga, codice: str) -> str:
-    """Lettura sintetica del singolo percorso, prima delle tabelle."""
+    """Lettura del singolo percorso, prima delle tabelle."""
     if codice == "A":
-        dom = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_H2_TON_ANNO"])
-        parti = []
-        if dom:
-            parti.append(f"La domanda potenziale complessiva ammonta a "
-                         f"**{formatta_numero(dom)} t/anno** di idrogeno.")
-        nicchie = [etichetta(c) for c in
-                   ("T23_FLAG_RIFUGI", "T23_FLAG_MEZZI_CRITICI", "T23_FLAG_COLD_STORAGE",
-                    "T23_FLAG_TRENI", "T23_FLAG_PORTI_AEROPORTI", "T23_FLAG_DEPURATORI")
-                   if c in riga.index and vero(riga[c])]
-        if nicchie:
-            parti.append("Sono presenti usi di nicchia rilevanti: " +
-                         ", ".join(n.lower() for n in nicchie) + ".")
-        if riga.get("T22_BEV_FATTIBILE") is not None and vero(riga.get("T22_BEV_FATTIBILE")):
-            parti.append("Per una parte della flotta l'alternativa elettrica a batteria "
-                         "risulta praticabile: l'idrogeno va riservato ai segmenti in cui "
-                         "autonomia, tempi di ricarica o carichi la rendono inadeguata.")
-        return " ".join(parti)
+        return testo_percorso_a(riga)
 
     if codice == "B":
         prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
@@ -665,76 +1155,8 @@ def costruisci_contenuti(riga, livello, profilo, punteggi) -> dict:
 
 def file_attesi(livello, profilo):
     attesi = ["1-intro_it.md", "2-struttura_plan_it.md", "3-maturita_intro_it.md",
-              f"3-maturita_{livello}_it.md", "4-profilo_intro_it.md"]
+              f"3-maturita_{livello}_it.md", "4-profilo_intro_it.md",
+              "5-percorsi_intro_it.md"]
     if profilo:
         attesi.append(f"4-profilo_{profilo}_it.md")
     return attesi
-
-def genera_sezione_hta(riga_comune, df_aziende):
-    """
-    Genera il testo dinamico in Markdown per la Sezione 2.1 (HTA & RED III)
-    riga_comune: la riga del foglio Google con le info generali del Comune
-    df_aziende: il DataFrame con le aziende filtrate per quel codice ISTAT
-    """
-    
-    # 1. PARTE TEORICA STATICA (Trattato HTA e RED III)
-    testo_introduttivo = """
-### 🏭 2.1 Mappatura della Domanda Industriale "Hard-to-Abate" e Normativa RED III
-
-#### Perché l'Idrogeno nei Settori "Hard-to-Abate" (HTA)?
-La transizione ecologica impone una gerarchia di intervento basata sulle leggi della termodinamica: laddove l'elettrificazione diretta è possibile (tramite pompe di calore, resistenze o induzione), essa rappresenta sempre la strada più efficiente e conveniente. Tuttavia, esistono comparti industriali definiti **Hard-to-Abate (HTA)** — come la siderurgia, la chimica, le raffinerie, le vetrerie e i cementifici — in cui l'elettrificazione incontra limiti fisici o chimici insuperabili:
-
-* **Requisiti di materia prima chimica (*feedstock*):** In settori come la chimica dei fertilizzanti o la raffinazione, la molecola di idrogeno partecipa direttamente alle reazioni chimiche (es. agente riducente per la fabbricazione dell'acciaio DRI o per la sintesi dell'ammoniaca). L'elettricità non può sostituire una molecola.
-* **Calore ad altissima temperatura (>800 - 1500°C):** Nei grandi forni fusori per il vetro o per la calcinazione del clinker, la densità di potenza richiesta e le caratteristiche della fiamma rendono l'elettrificazione totale complessa o rischiosa per gli impianti.
-* **Competitività e Meccanismo CBAM:** Per queste industrie, sostituire i combustibili fossili con l'idrogeno verde è essenziale per evitare le sanzioni del meccanismo europeo di addebitamento del carbonio alle frontiere (CBAM).
-
-#### Il Quadro Normativo RED III e gli Obblighi per l'Industria
-La Direttiva Europea sulla Promozione delle Energie Rinnovabili (**RED III**) introduce un vincolo di svolta: entro il 2030, almeno il **42% dell'idrogeno utilizzato nell'industria** dovrà provenire da fonti rinnovabili di origine non biologica (**RFNBO**), quota che salirà al **60% entro il 2035**. Le aziende HTA presenti sul territorio non avranno la facoltà di scegliere se decarbonizzare: per legge dovranno sostituire l'idrogeno grigio/fossile con idrogeno verde RFNBO.
-"""
-
-    # 2. CONTROLLO PRESENZA AZIENDE E CALCOLI DINAMICI
-    if df_aziende.empty or df_aziende['fabbisogno_ton'].sum() == 0:
-        testo_dinamico = """
-#### Analisi del Territorio Comunale
-Lo screening condotto sul tessuto industriale locale tramite il **Tool 2.1** non ha rilevato la presenza di impianti classificabili nei settori prioritari *Hard-to-Abate*. Ne consegue che sul territorio comunale non sussiste attualmente una domanda industriale diretta in grado di giustificare la realizzazione di infrastrutture dedicate all'idrogeno ad uso di processo. La strategia comunale dovrà prioritariamente orientarsi verso l'elettrificazione diretta delle utenze termiche a bassa e media temperatura e verso l'efficienza energetica.
-"""
-        return testo_introduttivo + testo_dinamico
-
-    # Se ci sono aziende, facciamo i calcoli fisici
-    totale_h2_ton = df_aziende['fabbisogno_ton'].sum()
-    n_aziende = len(df_aziende[df_aziende['fabbisogno_ton'] > 0])
-    
-    # Formula fisica: 1 kg H2 = 52 kWh el. -> 1 ton H2 = 52 MWh
-    mwh_elettrici_req = totale_h2_ton * 52
-    mwp_pv_req = mwh_elettrici_req / 1300  # 1300 MWh/MWp resa media Nord Italia
-    ettari_pv_req = mwp_pv_req * 1.3       # 1.3 ettari per MWp a terra
-    campi_calcio = int((ettari_pv_req * 10000) / 7140)
-
-    # Costruzione della tabella delle aziende in Markdown
-    righe_tabella = []
-    for _, az in df_aziende.iterrows():
-        if az['fabbisogno_ton'] > 0:
-            righe_tabella.append(
-                f"| **{az['nome']}** | `{az['ateco']}` | {az['desc_processo']} | {az['verdetto']} | {az['fabbisogno_ton']:,.1f} t/anno |"
-            )
-    tabella_md = "\n".join(righe_tabella)
-
-    testo_dinamico = f"""
-#### Mappatura delle Utenze e Fabbisogni Rilevati (Tool 2.1)
-Attraverso lo screening condotto sul territorio comunale, sono state individuate **{n_aziende} aziende idonee** che esprimono una domanda industriale complessiva di **{totale_h2_ton:,.1f} tonnellate/anno di idrogeno verde**.
-
-| Nome Azienda | Codice ATECO | Descrizione Processo & Temperatura | Verdetto Termodinamico | Fabbisogno Stimato |
-| :--- | :--- | :--- | :--- | :--- |
-{tabella_md}
-
-#### Considerazioni di Scala: "Reality Check" Territoriale
-Per comprendere l'impatto fisico e urbanistico di questa domanda, è necessario tradurre le tonnellate di idrogeno nel fabbisogno di energia elettrica e suolo necessari per produrlo in loco:
-
-* **Energia Elettrica Richiesta:** Produrre **{totale_h2_ton:,.1f} t/anno** di H₂ (considerando un consumo specifico dell'elettrolisi di $52 \\text{{ kWh/kg}}$) richiede circa **{mwh_elettrici_req:,.0f} MWh/anno** ({mwh_elettrici_req/1000:,.1f} GWh/anno) di elettricità 100% rinnovabile.
-* **Potenza Fotovoltaica Equivalente:** Se alimentato a fotovoltaico a terra, servirebbe un impianto dedicato di potenza pari a **{mwp_pv_req:,.1f} MWp**.
-* **Occupazione di Suolo:** Un parco fotovoltaico di questa taglia richiederebbe circa **{ettari_pv_req:,.0f} ettari di terreno** (pari a circa **{campi_calcio} campi da calcio**).
-
-> **💡 Implicazione Strategica per l'Amministrazione:** > L'estensione di suolo richiesta dimostra che il Comune non potrà coprire l'intero fabbisogno industriale con la sola produzione solare locale a chilometro zero. La strategia comunale dovrà quindi combinare la generazione locale su tetti/brownfield con l'importazione di molecole da reti di trasporto sovracomunali (*SoutH2 Corridor* / dorsali Snam).
-"""
-
-    return testo_introduttivo + testo_dinamico
