@@ -80,6 +80,15 @@ SUPERFICIE_PV_HA_MWP = 1.3          # fotovoltaico a terra
 SUPERFICIE_CAMPO_CALCIO_MQ = 7140.0
 
 
+
+# --- Parametri del confronto termico (Tool 2.4) -----------------------------
+# Servono a mettere a confronto, sulla stessa unità di energia utile, la caldaia
+# a idrogeno e la pompa di calore. Sono valori d'uso corrente, dichiarati nel
+# documento perché il risultato dipende quasi solo da questi tre numeri.
+PCI_H2_KWH_KG = 33.3             # potere calorifico inferiore dell'idrogeno
+RENDIMENTO_CALDAIA_H2 = 0.90     # caldaia a condensazione alimentata a idrogeno
+COP_POMPA_CALORE = 3.5           # coefficiente di prestazione stagionale medio
+
 # --- Parametri per la stima dei fabbisogni di nicchia (Tool 2.3) -------------
 # Conversioni usate per tradurre i driver fisici raccolti dal questionario in
 # chilogrammi di idrogeno. Sono ordini di grandezza dichiarati, non valori di
@@ -89,6 +98,18 @@ RESA_FUEL_CELL_KWH_KG = 17.0     # kWh elettrici da 1 kg di H2 (PEMFC, ~50%)
 CONSUMO_TRENO_KG_KM = 0.25       # automotrice a idrogeno su tratta regionale
 ORE_CARRELLO_GIORNO = 8.0        # turno tipico di un carrello elevatore
 GIORNI_LOGISTICA = 250           # giorni operativi di un magazzino
+
+# Sinergia depuratore-elettrolizzatore. L'elettrolisi produce 8 kg di ossigeno
+# per ogni kg di idrogeno: è il reagente che il depuratore oggi ottiene
+# comprimendo aria, la sua voce di consumo elettrico maggiore.
+RAPPORTO_O2_H2 = 8.0             # kg di ossigeno per kg di idrogeno
+# Valore prudenziale: 1,2 kg di ossigeno trasferito per kWh assorbito dai
+# compressori. È la resa che si ricava dal caso di riferimento (100.000 AE,
+# 70 g O2 per abitante equivalente al giorno) e tiene conto del rendimento
+# reale di trasferimento in vasca, sensibilmente inferiore a quello nominale
+# dei diffusori a bolle fini.
+RESA_AERAZIONE_KG_O2_KWH = 1.2
+QUOTA_CALORE_ELETTROLISI = 0.35  # frazione dell'energia dissipata come calore
 
 NICCHIE = {
     "T23_FLAG_RIFUGI":
@@ -120,9 +141,6 @@ PERCORSI = [
         "codice": "A",
         "titolo": "Percorso A - Domanda di idrogeno",
         "blocchi": [
-            ("Fabbisogno termico (Tool 2.4)", [
-                "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
-                "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO"]),
         ],
     },
     {
@@ -185,7 +203,9 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T23_RIFUGI_ELETTRICO_KWH", "T23_GASOLIO_FLOTTA_LITRI_ANNO",
            "T23_N_CARRELLI", "T23_POTENZA_CARRELLI_KW",
            "T23_TRATTA_NON_ELETTRIFICATA_KM", "T23_CORSE_GIORNALIERE",
-           "T23_AERAZIONE_KWH_ANNO"}
+           "T23_AERAZIONE_KWH_ANNO", "T23_N_MEZZI_SPECIALI", "T23_MEZZI_FUEL_CELL",
+           "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
+           "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
@@ -549,11 +569,13 @@ def testo_passo2(riga) -> str:
                 righe.append(f"| {etichetta(col)} | {valore} |")
             if righe:
                 blocchi_pieni.append((titolo_blocco, righe))
-        if not blocchi_pieni:
+        # un percorso puo' non avere blocchi tabellari e avere comunque molto da
+        # dire: e' il caso del percorso A, i cui dati sono discussi per esteso
+        commento = commento_percorso(riga, percorso["codice"])
+        if not blocchi_pieni and not commento:
             continue
 
         out.append(f"## {percorso['titolo']}")
-        commento = commento_percorso(riga, percorso["codice"])
         if commento:
             out += [commento, ""]
         for titolo_blocco, righe in blocchi_pieni:
@@ -1057,17 +1079,64 @@ DETTAGLIO_NICCHIE = {
     },
     "T23_FLAG_DEPURATORI": {
         "titolo": "Impianti di depurazione",
-        "testo": "L'aerazione delle vasche assorbe energia in modo costante tutto l'anno, "
-                 "senza le punte tipiche di altre utenze: è un carico di base ideale da "
-                 "accoppiare a una produzione locale. Alcuni impianti producono inoltre "
-                 "biogas, dal quale si può ricavare idrogeno senza passare "
-                 "dall'elettrolisi — una strada che va valutata prima di dimensionare "
-                 "qualunque elettrolizzatore.",
-        "driver": "T23_AERAZIONE_KWH_ANNO",
-        "unita": "kWh/anno",
-        "kg": lambda v: v / RESA_FUEL_CELL_KWH_KG,
+        "testo": "Il depuratore non è un consumatore di idrogeno ma un possibile sito di "
+                 "produzione, e per ragioni che nessun altro impianto comunale offre. "
+                 "L'elettrolisi genera otto chilogrammi di ossigeno puro per ogni "
+                 "chilogrammo di idrogeno: è esattamente il reagente che le vasche a "
+                 "fanghi attivi consumano, e che oggi si ottiene comprimendo aria — la "
+                 "voce di consumo elettrico più alta dell'intero impianto. A questo si "
+                 "aggiungono l'acqua di processo, disponibile in loco in quantità "
+                 "sovrabbondante, e il calore di scarto dello stack, che a 55-60 °C è "
+                 "adatto a mantenere i digestori anaerobici in regime mesofilo senza "
+                 "bruciare parte del biogas autoprodotto.",
+        "driver": None,          # trattato a parte: è produzione, non consumo
+        "unita": "",
+        "kg": None,
     },
 }
+
+
+
+def sinergia_depuratore(riga) -> str:
+    """Dimensiona l'elettrolizzatore che il depuratore potrebbe ospitare.
+
+    Il criterio non è la domanda di idrogeno ma il fabbisogno di ossigeno delle
+    vasche: si taglia l'elettrolizzatore su quello, e l'idrogeno diventa il
+    prodotto principale di un impianto nato per un'altra ragione.
+    """
+    kwh = numero(riga.get("T23_AERAZIONE_KWH_ANNO"))
+    if not kwh:
+        return ""
+
+    o2_anno = kwh * RESA_AERAZIONE_KG_O2_KWH
+    h2_anno = o2_anno / RAPPORTO_O2_H2
+    energia_mwh = h2_anno * CONSUMO_ELETTROLISI_KWH_KG / 1000
+    potenza_mw = energia_mwh * 1000 / 8000 / 1000      # esercizio quasi continuo
+    calore_kw = potenza_mw * 1000 * QUOTA_CALORE_ELETTROLISI
+    bus = h2_anno / (CONSUMO_BUS_KG_GIORNO * GIORNI_OPERATIVI)
+
+    out = ["", "| Grandezza | Valore |", "| --- | --- |",
+           f"| Consumo per aerazione | {formatta_numero(kwh)} kWh/anno |",
+           f"| Ossigeno oggi richiesto dalle vasche | {formatta_numero(round(o2_anno / 1000))} t/anno |",
+           f"| Idrogeno associato a quell'ossigeno | {formatta_numero(round(h2_anno / 1000))} t/anno |",
+           f"| Taglia dell'elettrolizzatore | {formatta_numero(potenza_mw)} MW |",
+           f"| Calore di scarto recuperabile | {formatta_numero(round(calore_kw))} kW termici |", ""]
+
+    out.append(f"Dimensionando l'elettrolizzatore sul fabbisogno di ossigeno delle vasche "
+               f"si otterrebbero circa **{formatta_numero(round(h2_anno / 1000))} tonnellate "
+               f"di idrogeno all'anno**, sufficienti ad alimentare l'equivalente di "
+               f"{formatta_numero(bus)} autobus urbani. L'ossigeno smetterebbe di essere un "
+               "sottoprodotto da disperdere e diventerebbe il reagente che oggi si paga "
+               "sotto forma di energia per la compressione dell'aria.")
+    out.append("")
+    out.append("> Stima costruita su una resa di trasferimento di "
+               f"{formatta_numero(RESA_AERAZIONE_KG_O2_KWH)} kg di ossigeno per kWh e sul "
+               "rapporto di massa fisso 1:8 dell'elettrolisi. È un ordine di grandezza per "
+               "capire se la sinergia meriti uno studio dedicato: il dimensionamento reale "
+               "richiede il carico organico effettivo dell'impianto, espresso in abitanti "
+               "equivalenti, e la verifica della compatibilità fra il profilo di produzione "
+               "dell'ossigeno e quello del consumo delle vasche.")
+    return "\n".join(out)
 
 
 def sezione_nicchie(riga) -> str:
@@ -1077,6 +1146,21 @@ def sezione_nicchie(riga) -> str:
         return ""
 
     out = [testo_da_template("A23-nicchie_intro_it.md", {}, TESTO_NICCHIE_PREDEFINITO), ""]
+
+    speciali = numero(riga.get("T23_N_MEZZI_SPECIALI"))
+    convertibili = numero(riga.get("T23_MEZZI_FUEL_CELL"))
+    if speciali or convertibili:
+        frase = []
+        if speciali:
+            frase.append(f"Il censimento ha individuato {formatta_numero(speciali)} mezzi "
+                         "speciali sul territorio")
+        if convertibili:
+            frase.append(f"di cui {formatta_numero(convertibili)} tecnicamente convertibili "
+                         "a celle a combustibile" if speciali else
+                         f"Risultano {formatta_numero(convertibili)} mezzi convertibili a "
+                         "celle a combustibile")
+        out += [", ".join(frase) + ".", ""]
+
     totale_kg = 0.0
     stimate = []
 
@@ -1104,6 +1188,9 @@ def sezione_nicchie(riga) -> str:
             out.append(f"Il questionario riporta {formatta_numero(driver)} "
                        f"{info['unita']}, che corrispondono a circa "
                        f"**{formatta_numero(kg / 1000)} tonnellate di idrogeno all'anno**.")
+
+        if colonna == "T23_FLAG_DEPURATORI":
+            out.append(sinergia_depuratore(riga))
 
         if kg:
             totale_kg += kg
@@ -1136,6 +1223,139 @@ def sezione_nicchie(riga) -> str:
                    f"{formatta_numero(CONSUMO_TRENO_KG_KM)} kg/km per l'automotrice "
                    "ferroviaria. Sono ordini di grandezza per orientare le priorità, non "
                    "valori di progetto.")
+
+    return "\n".join(out).strip()
+
+
+
+TESTO_TERMICO_PREDEFINITO = """### Fabbisogno termico degli edifici pubblici (Tool 2.4)
+
+Il riscaldamento degli edifici è il caso in cui la gerarchia termodinamica si vede
+con più chiarezza, ed è anche quello in cui l'idrogeno viene proposto più spesso a
+sproposito. La ragione è che il calore richiesto da una scuola o da un municipio si
+attesta fra i 40 e i 70 gradi: temperature che una pompa di calore raggiunge
+prelevando energia dall'ambiente, moltiplicando per tre o quattro ogni kilowattora
+elettrico consumato.
+
+Bruciare idrogeno per ottenere lo stesso calore significa invece percorrere una
+catena di trasformazioni — elettricità, elettrolisi, compressione, combustione — in
+cui ogni passaggio disperde energia. Il confronto che segue quantifica questa
+differenza sui consumi reali del patrimonio comunale.
+"""
+
+
+def sezione_termico(riga) -> str:
+    """Sezione 2.4: fabbisogno termico e confronto fra le soluzioni."""
+    termico = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
+    ottimale = riga.get("T24_SOLUZIONE_OTTIMALE")
+    pulita = riga.get("T24_SOLUZIONE_PIU_PULITA")
+    co2 = numero(riga.get("T24_EMISSIONI_EVITATE_KGCO2_ANNO"))
+
+    if not termico and is_vuoto(ottimale):
+        return ""
+
+    out = [testo_da_template("A24-termico_intro_it.md", {}, TESTO_TERMICO_PREDEFINITO), ""]
+
+    if termico:
+        # stessa energia utile, due strade: quanta elettricità serve a ciascuna
+        kg_h2 = termico / RENDIMENTO_CALDAIA_H2 / PCI_H2_KWH_KG
+        elettrico_h2 = kg_h2 * CONSUMO_ELETTROLISI_KWH_KG
+        elettrico_pdc = termico / COP_POMPA_CALORE
+        rapporto = elettrico_h2 / elettrico_pdc if elettrico_pdc else None
+
+        out.append("#### Le due strade a confronto")
+        out += ["| Voce | Caldaia a idrogeno | Pompa di calore |", "| --- | --- | --- |",
+                f"| Calore utile richiesto | {formatta_numero(termico)} kWh/anno | "
+                f"{formatta_numero(termico)} kWh/anno |",
+                f"| Idrogeno necessario | {formatta_numero(round(kg_h2))} kg/anno | — |",
+                f"| Elettricità necessaria | {formatta_numero(round(elettrico_h2))} kWh/anno | "
+                f"{formatta_numero(round(elettrico_pdc))} kWh/anno |", ""]
+
+        if rapporto:
+            out.append(f"A parità di calore prodotto, la via dell'idrogeno consuma "
+                       f"**{formatta_numero(rapporto)} volte l'energia elettrica** della "
+                       "pompa di calore. Non è una differenza marginale che il progresso "
+                       "tecnologico possa colmare: discende dal fatto che la pompa di "
+                       "calore sposta calore già presente nell'ambiente, mentre "
+                       "l'elettrolisi lo produce da capo passando per la molecola.")
+            out.append("")
+            out.append("> Confronto condotto con un potere calorifico di "
+                       f"{formatta_numero(PCI_H2_KWH_KG)} kWh/kg, un rendimento di caldaia "
+                       f"del {formatta_numero(RENDIMENTO_CALDAIA_H2 * 100)}%, un consumo di "
+                       f"elettrolisi di {formatta_numero(CONSUMO_ELETTROLISI_KWH_KG)} kWh/kg "
+                       f"e un coefficiente di prestazione stagionale di "
+                       f"{formatta_numero(COP_POMPA_CALORE)} per la pompa di calore.")
+            out.append("")
+
+    # --- esito dello strumento
+    if not is_vuoto(ottimale) or not is_vuoto(pulita):
+        out.append("#### Esito dell'analisi")
+        righe = []
+        if not is_vuoto(ottimale):
+            righe.append(f"| Soluzione economicamente ottimale | {str(ottimale).strip()} |")
+        if not is_vuoto(pulita):
+            righe.append(f"| Soluzione a minori emissioni | {str(pulita).strip()} |")
+        if co2:
+            righe.append(f"| Emissioni evitate | {formatta_numero(co2 / 1000)} tCO2/anno |")
+        out += ["| Voce | Esito |", "| --- | --- |"] + righe + [""]
+
+        testo_ott = str(ottimale).strip().lower()
+        testo_pul = str(pulita).strip().lower()
+        h2_ottimale = "idrogeno" in testo_ott
+        h2_piu_pulito = "idrogeno" in testo_pul
+        pdc_ottimale = "pompa" in testo_ott or "calore" in testo_ott
+
+        # Controllo di plausibilità: una caldaia a idrogeno non può risultare meno
+        # emissiva di una pompa di calore, perché la prima consuma diverse volte
+        # l'energia della seconda per lo stesso calore utile. Se l'esito lo afferma,
+        # il dato è sbagliato e va segnalato invece di essere commentato.
+        if h2_piu_pulito and pdc_ottimale:
+            out.append("> **Esito da verificare.** Il confronto energetico riportato sopra "
+                       "mostra che la caldaia a idrogeno consuma diverse volte l'energia "
+                       "della pompa di calore per produrre lo stesso calore: non può quindi "
+                       "risultare la soluzione a minori emissioni, a meno che l'idrogeno "
+                       "impiegato non provenga da un surplus altrimenti inutilizzato. "
+                       "Prima di procedere occorre rivedere le ipotesi inserite nel Tool "
+                       "2.4, in particolare il fattore di emissione attribuito "
+                       "all'elettricità di rete e la provenienza dell'idrogeno.")
+            out.append("")
+
+        implausibile = h2_piu_pulito and pdc_ottimale
+
+        if implausibile:
+            pass
+        elif not is_vuoto(ottimale) and not is_vuoto(pulita) and testo_ott == testo_pul:
+            out.append("La soluzione più conveniente coincide con quella a minori "
+                       "emissioni: non vi è alcun conflitto fra sostenibilità economica e "
+                       "obiettivo ambientale, e la decisione non richiede compromessi.")
+        elif not is_vuoto(ottimale) and not is_vuoto(pulita):
+            out.append(f"La soluzione economicamente ottimale (*{str(ottimale).strip()}*) "
+                       f"non coincide con quella a minori emissioni "
+                       f"(*{str(pulita).strip()}*). È una scelta politica prima che "
+                       "tecnica, e come tale va esplicitata nel piano: bisogna dichiarare "
+                       "quale criterio prevale, con quali risorse si copre l'eventuale "
+                       "differenza e su quale orizzonte la si recupera. Lasciare implicita "
+                       "questa decisione è il modo più rapido per trovarsi con un impianto "
+                       "che nessuno difende quando arriva il momento di finanziarlo.")
+
+        if h2_ottimale:
+            out.append("")
+            out.append("L'idrogeno risulta la soluzione ottimale per il fabbisogno termico: "
+                       "è un esito raro, che vale la pena verificare. Di norma si verifica "
+                       "solo in presenza di condizioni particolari — edifici storici in cui "
+                       "non è possibile intervenire sugli impianti di distribuzione, "
+                       "temperature di processo elevate, o disponibilità di idrogeno di "
+                       "scarto già presente sul territorio. Se nessuna di queste ricorre, "
+                       "conviene rivedere le ipotesi di calcolo prima di procedere.")
+        elif termico:
+            out.append("")
+            out.append("Prima di destinare idrogeno al riscaldamento conviene esaurire le "
+                       "misure che riducono il fabbisogno stesso: isolamento "
+                       "dell'involucro, sostituzione dei serramenti, regolazione degli "
+                       "impianti. Un edificio che consuma meno richiede una macchina più "
+                       "piccola, qualunque essa sia, e l'intervento sull'involucro ha una "
+                       "vita utile doppia rispetto a quella di qualsiasi generatore.")
+        out.append("")
 
     return "\n".join(out).strip()
 
@@ -1274,29 +1494,9 @@ def testo_percorso_a(riga) -> str:
     out.append(sezione_nicchie(riga))
     out.append("")
 
-    # --- 7. fabbisogno termico
-    termico = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
-    ottimale = riga.get("T24_SOLUZIONE_OTTIMALE")
-    pulita = riga.get("T24_SOLUZIONE_PIU_PULITA")
-    if termico or not is_vuoto(ottimale):
-        out.append("### Fabbisogno termico degli edifici pubblici")
-        if termico:
-            out.append(f"Il fabbisogno termico rilevato è di {formatta_numero(termico)} "
-                       "kWh/anno.")
-        if not is_vuoto(ottimale) and not is_vuoto(pulita):
-            if str(ottimale).strip().lower() == str(pulita).strip().lower():
-                out.append(f"La soluzione ottimale coincide con quella a minori emissioni "
-                           f"(*{str(ottimale).strip()}*): non vi è conflitto fra convenienza "
-                           "economica e obiettivo ambientale.")
-            else:
-                out.append(f"La soluzione economicamente ottimale (*{str(ottimale).strip()}*) "
-                           f"non coincide con quella a minori emissioni "
-                           f"(*{str(pulita).strip()}*). È una scelta politica prima che "
-                           "tecnica: va esplicitata nel piano, indicando quale criterio "
-                           "prevale e perché.")
-        elif not is_vuoto(ottimale):
-            out.append(f"La soluzione individuata come ottimale è: *{str(ottimale).strip()}*.")
-        out.append("")
+    # --- 7. fabbisogno termico (Tool 2.4)
+    out.append(sezione_termico(riga))
+    out.append("")
 
     return "\n".join(out).strip()
 
