@@ -43,10 +43,23 @@ NOMI_PROFILO = {
 # Sono i valori su cui si tarano i giudizi qualitativi: modificarli qui.
 # -----------------------------------------------------------------------------
 
-# Flotta minima ritenuta sostenibile: 10 bus x 26 kg/giorno x 300 giorni ~ 78 t/anno
+# --- Soglie sulla domanda complessiva (processo + mobilità) ------------------
+# Flotta minima ritenuta sostenibile: 10 mezzi pesanti x 26 kg/giorno x 300
+# giorni, cioè circa 78 t/anno. È il riferimento per un progetto autonomo.
 SOGLIA_MASSA_CRITICA_TON = 78.0
 # Sotto questa soglia la domanda è troppo frammentata per un progetto autonomo
 SOGLIA_DOMANDA_MINIMA_TON = 25.0
+
+# --- Soglie sulla sola mobilità ---------------------------------------------
+# Una flotta comunale non si misura con il metro del trasporto pesante: uno
+# scuolabus percorre 80-100 km al giorno per circa 190 giorni di servizio, un
+# camion a lungo raggio molti di più per 300 giorni. Le soglie qui sotto non
+# derivano dal numero di mezzi ma dal minimo tecnico di erogazione, che è ciò
+# che davvero determina la fattibilità del rifornimento.
+#   30 t/anno = 100 kg/giorno: minimo per una stazione dedicata, anche piccola
+#    8 t/anno =  27 kg/giorno: un solo mezzo pesante in servizio continuo
+SOGLIA_MOBILITA_AUTONOMA_TON = 30.0
+SOGLIA_MOBILITA_MINIMA_TON = 8.0
 
 CONSUMO_BUS_KG_GIORNO = 26.0        # bus urbano da 12 m, 250 km/giorno
 GIORNI_OPERATIVI = 300              # giorni di servizio in un anno
@@ -107,7 +120,8 @@ PERCORSI = [
                 "T23_RIFUGI_ELETTRICO_KWH", "T23_GASOLIO_FLOTTA_LITRI_ANNO",
                 "T23_N_CARRELLI", "T23_POTENZA_CARRELLI_KW",
                 "T23_TRATTA_NON_ELETTRIFICATA_KM", "T23_CORSE_GIORNALIERE",
-                "T23_AERAZIONE_KWH_ANNO"]),
+                "T23_AERAZIONE_KWH_ANNO", "T23_N_MEZZI_SPECIALI",
+                "T23_MEZZI_FUEL_CELL"]),
             ("Fabbisogno termico (Tool 2.4)", [
                 "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
                 "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO"]),
@@ -123,7 +137,9 @@ PERCORSI = [
                 "T25_SUP_BROWNFIELD_MQ", "T25_SUP_TETTI_IND_MQ", "T25_SUP_TETTI_CIV_MQ",
                 "T25_SUP_INCOLTE_MQ", "T25_SUP_SAU_MQ", "T25_SUP_SERVITU_MQ",
                 "T25_DISTANZA_CABINA_PRIMARIA_KM", "T25_CAPACITA_RESIDUA_MW",
-                "T25_ENTRO_5KM_DORSALE"]),
+                "T25_ENTRO_5KM_DORSALE", "T25_SUP_PUBBLICA_MQ",
+                "T25_PV_TERRA_INSTALLATO_MW", "T25_PROGRAMMABILI_MW",
+                "T25_FLAG_EOLICO_IDONEO", "T25_FLAG_DISPACCIAMENTO"]),
             ("Dimensionamento dell'impianto (Tool 2.6)", [
                 "T26_MODALITA", "T26_ZONA", "T26_TARGET_H2_TON", "T26_PV_TERRA_MW",
                 "T26_PV_TETTI_MW", "T26_PV_CAPANNONI_MW", "T26_EOLICO_MW",
@@ -143,7 +159,9 @@ PERCORSI = [
         "blocchi": [
             ("Vocazione al transito (Tool 2.7)", [
                 "T27_TGM_CAMION", "T27_DISTANZA_SNAM_KM", "T27_SCORE_C1", "T27_SCORE_C2",
-                "T27_SCORE_C3", "T27_SCORE_GOV", "T27_FLAG_AREE_700BAR"]),
+                "T27_SCORE_C3", "T27_SCORE_GOV", "T27_FLAG_AREE_700BAR",
+                "T27_FLAG_AFIR_GAP", "T27_FLAG_HUB_MERCI", "T27_FLAG_SINERGIA_HTA",
+                "T27_FLAG_ACCORDI_FILIERA", "T27_FLAG_PUMS"]),
             ("Stazione di rifornimento (Tool 2.8)", [
                 "T28_TAGLIA_HRS", "T28_CONFIGURAZIONE", "T28_CAPACITA_KG_GIORNO",
                 "T28_N_DISPENSER", "T28_STRATEGIA_SUPPLY", "T28_POTENZA_COMPRESSORE_KW",
@@ -160,7 +178,7 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T21_ATECO_AZIENDE", "T21_FABBISOGNI_AZIENDE", "T21_FAMIGLIE_AZIENDE"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
-                   "T12_FLAG_JOINT_PROCUREMENT"]
+                   "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
 
 # =============================================================================
 # FORMATTAZIONE AUTOMATICA
@@ -273,6 +291,19 @@ ETICHETTE = {
     "T28_BREAK_EVEN_EURO_KG": "Prezzo di pareggio alla pompa",
     "T28_ORIZZONTE": "Orizzonte temporale",
     "T28_QUOTA_FCEV_PERC": "Quota di veicoli a celle a combustibile",
+    "T23_N_MEZZI_SPECIALI": "Mezzi speciali censiti",
+    "T23_MEZZI_FUEL_CELL": "Mezzi convertibili a celle a combustibile",
+    "T23_FLAG_HYDROGEN_VALLEY": "Hydrogen Valley già finanziata nell'area",
+    "T25_SUP_PUBBLICA_MQ": "Superfici di proprietà pubblica",
+    "T25_PV_TERRA_INSTALLATO_MW": "Fotovoltaico a terra già installato",
+    "T25_PROGRAMMABILI_MW": "Fonti programmabili in esercizio",
+    "T25_FLAG_EOLICO_IDONEO": "Aree con ventosità adeguata",
+    "T25_FLAG_DISPACCIAMENTO": "Interesse ai mercati di dispacciamento",
+    "T27_FLAG_AFIR_GAP": "Colma un vuoto della rete AFIR",
+    "T27_FLAG_HUB_MERCI": "Hub merci o interporti entro 5 km",
+    "T27_FLAG_SINERGIA_HTA": "Sinergia con distretti Hard-to-Abate",
+    "T27_FLAG_ACCORDI_FILIERA": "Accordi di filiera già attivi",
+    "T27_FLAG_PUMS": "Idrogeno nella pianificazione della mobilità",
     "T12_FLAG_PIANIFICAZIONE": "Idrogeno negli strumenti di pianificazione",
     "T12_FLAG_NAHV": "Adesione alla North Adriatic Hydrogen Valley",
     "T12_FLAG_JOINT_PROCUREMENT": "Disponibilità ad appalti congiunti",
@@ -774,6 +805,148 @@ def sezione_hta(riga) -> str:
     return "\n".join(out)
 
 
+
+TESTO_FLOTTE_PREDEFINITO = """### Flotte e mobilità (Tool 2.2)
+
+Nel trasporto la gerarchia di intervento è la stessa dell'industria, ma i confini
+sono più netti. Per i mezzi leggeri e per le percorrenze urbane la batteria è oggi
+più efficiente, più economica e più matura: l'idrogeno vi sarebbe uno spreco di
+energia primaria, perché per ogni kilowattora impiegato alla ruota ne servono circa
+tre alla produzione. Il vantaggio dell'idrogeno emerge dove la batteria incontra
+limiti fisici — autonomie elevate senza soste lunghe, carichi utili che il peso
+delle celle eroderebbe, mezzi in servizio continuo su più turni, temperature rigide
+che riducono la capacità disponibile.
+
+La valutazione che segue si fonda sul costo totale di possesso, che considera
+insieme l'acquisto del mezzo, il carburante, la manutenzione e il valore residuo:
+è il solo criterio che permette di confrontare tecnologie con costi iniziali e
+costi di esercizio tanto diversi.
+"""
+
+
+def sezione_flotte(riga) -> str:
+    """Sezione 2.2: analisi della flotta e del costo totale di possesso."""
+    n_veicoli = numero(riga.get("T22_N_VEICOLI_ANALIZZATI"))
+    fabbisogno = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
+    esito = riga.get("T22_ESITO_PREVALENTE")
+    bev = riga.get("T22_BEV_FATTIBILE")
+    delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
+    elettrico = numero(riga.get("T22_FABBISOGNO_ELETTRICO_MWH_ANNO"))
+    elettrolisi = numero(riga.get("T22_ENERGIA_ELETTROLISI_MWH_ANNO"))
+    co2 = numero(riga.get("T22_EMISSIONI_EVITATE_TCO2"))
+
+    if not any(v is not None for v in (n_veicoli, fabbisogno, delta_tco)) and is_vuoto(esito):
+        return ""
+
+    out = [testo_da_template("A22-flotte_intro_it.md", {}, TESTO_FLOTTE_PREDEFINITO), ""]
+
+    # --- quadro dell'analisi
+    righe = []
+    if n_veicoli:
+        righe.append(f"| Veicoli analizzati | {formatta_numero(n_veicoli)} |")
+    if not is_vuoto(esito):
+        righe.append(f"| Esito prevalente | {str(esito).strip()} |")
+    if fabbisogno:
+        kg_giorno = fabbisogno * 1000 / GIORNI_OPERATIVI
+        righe.append(f"| Fabbisogno di idrogeno | {formatta_numero(fabbisogno)} t/anno |")
+        righe.append(f"| Erogazione media richiesta | {formatta_numero(kg_giorno)} kg/giorno |")
+    if co2:
+        righe.append(f"| Emissioni evitate | {formatta_numero(co2)} tCO2/anno |")
+    if righe:
+        out += ["| Parametro | Valore |", "| --- | --- |"] + righe + [""]
+
+    # --- massa critica della sola mobilità
+    if fabbisogno:
+        kg_giorno = fabbisogno * 1000 / GIORNI_OPERATIVI
+        out.append("#### Sostenibilità del rifornimento")
+        if fabbisogno >= SOGLIA_MOBILITA_AUTONOMA_TON:
+            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno la flotta giustifica "
+                       "**un punto di rifornimento dedicato**: si supera la soglia tecnica "
+                       f"di {formatta_numero(SOGLIA_MOBILITA_AUTONOMA_TON)} t/anno sotto la "
+                       "quale una stazione, anche di piccola taglia, non regge i costi fissi. "
+                       "Il deposito comunale diventa allora il candidato naturale, con il "
+                       "vantaggio che i mezzi rientrano ogni sera e il rifornimento può "
+                       "avvenire in orario notturno.")
+        elif fabbisogno >= SOGLIA_MOBILITA_MINIMA_TON:
+            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno la flotta si colloca "
+                       "**sotto la soglia di una stazione dedicata** ma sopra il minimo "
+                       "operativo. Le strade praticabili sono due: aggregare la domanda con "
+                       "quella di Comuni limitrofi o di operatori privati, oppure "
+                       "appoggiarsi a una stazione esistente entro un raggio compatibile "
+                       "con le percorrenze quotidiane dei mezzi.")
+        else:
+            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno **la flotta da sola "
+                       "non giustifica alcuna infrastruttura di rifornimento**. La "
+                       "conversione resta possibile solo se il territorio ospita già una "
+                       "stazione per altri usi, oppure come intervento dimostrativo su "
+                       "pochi mezzi, con approvvigionamento tramite carro bombolaio.")
+        out.append("")
+
+    # --- alternativa elettrica
+    if not is_vuoto(bev):
+        out.append("#### Confronto con l'alternativa elettrica")
+        if vero(bev):
+            frase = ("Per una parte dei mezzi analizzati **l'alternativa a batteria risulta "
+                     "praticabile**. È un risultato che va preso sul serio: dove la batteria "
+                     "arriva, arriva meglio, perché l'efficienza dalla presa alla ruota è "
+                     "circa tre volte superiore. L'idrogeno va quindi riservato ai segmenti "
+                     "in cui la batteria non basta, e destinare risorse pubbliche a "
+                     "convertire mezzi che potrebbero essere elettrici peggiora sia il "
+                     "bilancio economico sia quello energetico.")
+        else:
+            frase = ("Sui mezzi analizzati **l'alternativa a batteria non risulta "
+                     "praticabile**, per autonomia richiesta, carichi o continuità di "
+                     "servizio. L'idrogeno resta l'unica opzione a zero emissioni allo "
+                     "scarico per questo segmento, il che rafforza la solidità del caso "
+                     "d'uso: non si sta scegliendo fra due strade, se ne sta percorrendo "
+                     "l'unica disponibile.")
+        out += [frase, ""]
+
+    # --- confronto energetico
+    if elettrico and elettrolisi:
+        rapporto = elettrolisi / elettrico if elettrico else None
+        out.append("#### Energia richiesta dalle due strade")
+        out += ["| Voce | Valore |", "| --- | --- |",
+                f"| Elettrificazione diretta della flotta | {formatta_numero(elettrico)} MWh/anno |",
+                f"| Produzione dell'idrogeno equivalente | {formatta_numero(elettrolisi)} MWh/anno |"]
+        if rapporto:
+            out.append(f"| Rapporto fra le due | {formatta_numero(rapporto)} volte |")
+        out.append("")
+        if rapporto and rapporto > 1.5:
+            out.append(f"La via dell'idrogeno richiede {formatta_numero(rapporto)} volte "
+                       "l'energia della via elettrica diretta. È il costo termodinamico "
+                       "della conversione, e va messo in conto: si accetta dove la batteria "
+                       "non è praticabile, non come scelta di preferenza.")
+            out.append("")
+
+    # --- costo totale di possesso
+    if delta_tco is not None:
+        out.append("#### Costo totale di possesso")
+        if delta_tco > 0:
+            per_mezzo = delta_tco / n_veicoli if n_veicoli else None
+            frase = (f"La conversione costa **Euro {formatta_numero(delta_tco)} in più** "
+                     "rispetto ai mezzi convenzionali sull'intero ciclo di vita")
+            if per_mezzo:
+                frase += f", pari a circa Euro {formatta_numero(per_mezzo)} per veicolo"
+            frase += (". Il divario va colmato con contributi in conto capitale — i bandi "
+                      "regionali e il PNRR coprono in genere il differenziale d'acquisto — "
+                      "e va rivalutato periodicamente, perché si riduce con la discesa del "
+                      "prezzo dell'idrogeno e con la scala di produzione dei veicoli.")
+            out.append(frase)
+        else:
+            out.append(f"La conversione risulta **conveniente di Euro "
+                       f"{formatta_numero(abs(delta_tco))}** sul ciclo di vita rispetto ai "
+                       "mezzi convenzionali. È un risultato favorevole ma condizionato: "
+                       "dipende dal prezzo dell'idrogeno alla pompa assunto nella "
+                       "simulazione, che è la variabile più incerta dell'intero calcolo. "
+                       "Prima di deliberare l'investimento conviene verificare che quel "
+                       "prezzo sia coerente con l'offerta effettivamente disponibile sul "
+                       "territorio.")
+        out.append("")
+
+    return "\n".join(out).strip()
+
+
 def testo_percorso_a(riga) -> str:
     """Lettura discorsiva del percorso A - domanda di idrogeno."""
     ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
@@ -900,44 +1073,9 @@ def testo_percorso_a(riga) -> str:
                        "rifornimento su strada.")
             out.append("")
 
-    # --- 5. flotte
-    esito = riga.get("T22_ESITO_PREVALENTE")
-    n_veicoli = numero(riga.get("T22_N_VEICOLI_ANALIZZATI"))
-    delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
-    bev = riga.get("T22_BEV_FATTIBILE")
-    if n_veicoli or not is_vuoto(esito):
-        out.append("### Flotte e mobilità")
-        if n_veicoli:
-            out.append(f"L'analisi ha riguardato {formatta_numero(n_veicoli)} veicoli.")
-        if not is_vuoto(esito):
-            out.append(f"L'esito prevalente è: *{str(esito).strip()}*.")
-        if bev is not None and not is_vuoto(bev):
-            if vero(bev):
-                out.append("Per una parte dei mezzi **l'alternativa elettrica a batteria "
-                           "risulta praticabile**. L'idrogeno va quindi riservato ai "
-                           "segmenti in cui autonomia, tempi di rifornimento o carichi "
-                           "rendono la batteria inadeguata: destinarlo a usi che la "
-                           "batteria copre meglio peggiora sia i costi sia il bilancio "
-                           "energetico complessivo.")
-            else:
-                out.append("L'alternativa elettrica a batteria non risulta praticabile sui "
-                           "mezzi analizzati: **l'idrogeno è l'unica opzione a zero "
-                           "emissioni allo scarico** per questo segmento di flotta, il che "
-                           "rafforza la solidità del caso d'uso.")
-        if delta_tco is not None:
-            if delta_tco > 0:
-                out.append(f"Il costo totale di possesso resta superiore a quello dei mezzi "
-                           f"convenzionali di Euro {formatta_numero(delta_tco)} sull'intero "
-                           "ciclo di vita: il divario va colmato con contributi in conto "
-                           "capitale, e va monitorato perché si riduce con la discesa dei "
-                           "costi di produzione dell'idrogeno.")
-            else:
-                out.append(f"Il costo totale di possesso risulta **inferiore** a quello dei "
-                           f"mezzi convenzionali di Euro {formatta_numero(abs(delta_tco))} "
-                           "sul ciclo di vita: la conversione si regge senza contributo, "
-                           "purché il prezzo dell'idrogeno alla pompa rimanga entro le "
-                           "ipotesi assunte.")
-        out.append("")
+    # --- 5. flotte e mobilità (Tool 2.2)
+    out.append(sezione_flotte(riga))
+    out.append("")
 
     # --- 6. usi di nicchia
     attive = [NICCHIE[c] for c in NICCHIE if c in riga.index and vero(riga[c])]
