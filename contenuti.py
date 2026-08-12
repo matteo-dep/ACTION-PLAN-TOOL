@@ -79,6 +79,17 @@ RESA_PV_KWH_KWP = 1200.0            # producibilità media in Friuli Venezia Giu
 SUPERFICIE_PV_HA_MWP = 1.3          # fotovoltaico a terra
 SUPERFICIE_CAMPO_CALCIO_MQ = 7140.0
 
+
+# --- Parametri per la stima dei fabbisogni di nicchia (Tool 2.3) -------------
+# Conversioni usate per tradurre i driver fisici raccolti dal questionario in
+# chilogrammi di idrogeno. Sono ordini di grandezza dichiarati, non valori di
+# progetto: servono a capire se una nicchia pesa quanto un mezzo o quanto una
+# flotta, non a dimensionare un impianto.
+RESA_FUEL_CELL_KWH_KG = 17.0     # kWh elettrici da 1 kg di H2 (PEMFC, ~50%)
+CONSUMO_TRENO_KG_KM = 0.25       # automotrice a idrogeno su tratta regionale
+ORE_CARRELLO_GIORNO = 8.0        # turno tipico di un carrello elevatore
+GIORNI_LOGISTICA = 250           # giorni operativi di un magazzino
+
 NICCHIE = {
     "T23_FLAG_RIFUGI":
         "rifugi e utenze isolate, dove l'idrogeno compete con il generatore diesel "
@@ -109,19 +120,6 @@ PERCORSI = [
         "codice": "A",
         "titolo": "Percorso A - Domanda di idrogeno",
         "blocchi": [
-            ("Flotte e mobilità (Tool 2.2)", [
-                "T22_N_VEICOLI_ANALIZZATI", "T22_ESITO_PREVALENTE", "T22_BEV_FATTIBILE",
-                "T22_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_ELETTRICO_MWH_ANNO",
-                "T22_ENERGIA_ELETTROLISI_MWH_ANNO", "T22_DELTA_TCO_EURO",
-                "T22_EMISSIONI_EVITATE_TCO2"]),
-            ("Usi di nicchia (Tool 2.3)", [
-                "T23_FLAG_RIFUGI", "T23_FLAG_MEZZI_CRITICI", "T23_FLAG_COLD_STORAGE",
-                "T23_FLAG_TRENI", "T23_FLAG_PORTI_AEROPORTI", "T23_FLAG_DEPURATORI",
-                "T23_RIFUGI_ELETTRICO_KWH", "T23_GASOLIO_FLOTTA_LITRI_ANNO",
-                "T23_N_CARRELLI", "T23_POTENZA_CARRELLI_KW",
-                "T23_TRATTA_NON_ELETTRIFICATA_KM", "T23_CORSE_GIORNALIERE",
-                "T23_AERAZIONE_KWH_ANNO", "T23_N_MEZZI_SPECIALI",
-                "T23_MEZZI_FUEL_CELL"]),
             ("Fabbisogno termico (Tool 2.4)", [
                 "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
                 "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO"]),
@@ -172,10 +170,22 @@ PERCORSI = [
 ]
 
 # T21_*: già trattate per esteso nella sezione 2.1, non si ripetono in tabella
+# I dati dei tool 2.1, 2.2 e 2.3 sono discussi per esteso nel testo del percorso A:
+# ripeterli in tabella allungherebbe il documento senza aggiungere nulla.
 ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T12_SCORE_A", "T12_SCORE_B", "T12_SCORE_C",
            "T21_N_AZIENDE_IDONEE", "T21_NOMI_AZIENDE", "T21_FABBISOGNO_H2_TON_ANNO",
-           "T21_ATECO_AZIENDE", "T21_FABBISOGNI_AZIENDE", "T21_FAMIGLIE_AZIENDE"}
+           "T21_ATECO_AZIENDE", "T21_FABBISOGNI_AZIENDE", "T21_FAMIGLIE_AZIENDE",
+           "T22_N_VEICOLI_ANALIZZATI", "T22_ESITO_PREVALENTE", "T22_BEV_FATTIBILE",
+           "T22_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_ELETTRICO_MWH_ANNO",
+           "T22_ENERGIA_ELETTROLISI_MWH_ANNO", "T22_DELTA_TCO_EURO",
+           "T22_EMISSIONI_EVITATE_TCO2",
+           "T23_FLAG_RIFUGI", "T23_FLAG_MEZZI_CRITICI", "T23_FLAG_COLD_STORAGE",
+           "T23_FLAG_TRENI", "T23_FLAG_PORTI_AEROPORTI", "T23_FLAG_DEPURATORI",
+           "T23_RIFUGI_ELETTRICO_KWH", "T23_GASOLIO_FLOTTA_LITRI_ANNO",
+           "T23_N_CARRELLI", "T23_POTENZA_CARRELLI_KW",
+           "T23_TRATTA_NON_ELETTRIFICATA_KM", "T23_CORSE_GIORNALIERE",
+           "T23_AERAZIONE_KWH_ANNO"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
@@ -859,27 +869,48 @@ def sezione_flotte(riga) -> str:
     if fabbisogno:
         kg_giorno = fabbisogno * 1000 / GIORNI_OPERATIVI
         out.append("#### Sostenibilità del rifornimento")
-        if fabbisogno >= SOGLIA_MOBILITA_AUTONOMA_TON:
-            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno la flotta giustifica "
-                       "**un punto di rifornimento dedicato**: si supera la soglia tecnica "
-                       f"di {formatta_numero(SOGLIA_MOBILITA_AUTONOMA_TON)} t/anno sotto la "
-                       "quale una stazione, anche di piccola taglia, non regge i costi fissi. "
-                       "Il deposito comunale diventa allora il candidato naturale, con il "
-                       "vantaggio che i mezzi rientrano ogni sera e il rifornimento può "
-                       "avvenire in orario notturno.")
+        bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
+        if fabbisogno >= SOGLIA_MASSA_CRITICA_TON:
+            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno — l'equivalente di "
+                       f"circa {formatta_numero(bus_eq)} autobus urbani in servizio — la "
+                       "flotta raggiunge la scala che rende sostenibile **un impianto di "
+                       "rifornimento presso il proprio deposito**. È la configurazione più "
+                       "favorevole: i mezzi rientrano ogni sera, il rifornimento avviene in "
+                       "orario notturno e la domanda è interamente sotto il controllo "
+                       "dell'amministrazione, il che elimina il rischio di mercato che "
+                       "grava su qualunque stazione aperta al pubblico.")
+        elif fabbisogno >= SOGLIA_MOBILITA_AUTONOMA_TON:
+            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno la flotta supera la "
+                       f"soglia tecnica di {formatta_numero(SOGLIA_MOBILITA_AUTONOMA_TON)} "
+                       "t/anno, sotto la quale una stazione non ammortizza i costi fissi di "
+                       "compressione e preraffreddamento. Resta però **al di sotto della "
+                       f"scala di {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno** — "
+                       "l'equivalente di una decina di mezzi pesanti — che i modelli di "
+                       "business individuano come punto di pareggio per un impianto "
+                       "dedicato al solo deposito comunale. L'infrastruttura è quindi "
+                       "tecnicamente possibile ma economicamente fragile se resta isolata: "
+                       "conviene dimensionarla per servire anche utenze esterne, oppure "
+                       "condividerla con Comuni limitrofi e operatori privati.")
         elif fabbisogno >= SOGLIA_MOBILITA_MINIMA_TON:
             out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno la flotta si colloca "
-                       "**sotto la soglia di una stazione dedicata** ma sopra il minimo "
-                       "operativo. Le strade praticabili sono due: aggregare la domanda con "
-                       "quella di Comuni limitrofi o di operatori privati, oppure "
-                       "appoggiarsi a una stazione esistente entro un raggio compatibile "
-                       "con le percorrenze quotidiane dei mezzi.")
+                       "**sotto la soglia di una stazione dedicata**, pur restando sopra il "
+                       "minimo operativo. È la situazione tipica di chi avvia una flotta "
+                       "sperimentale di due o tre mezzi. Le strade praticabili sono due: "
+                       "aggregare la domanda con quella di Comuni vicini o di operatori "
+                       "privati fino a raggiungere la massa critica, oppure rifornirsi "
+                       "presso stazioni pubbliche esistenti lungo le direttrici TEN-T, "
+                       "verificando che la distanza sia compatibile con le percorrenze "
+                       "quotidiane dei mezzi.")
         else:
-            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno **la flotta da sola "
-                       "non giustifica alcuna infrastruttura di rifornimento**. La "
-                       "conversione resta possibile solo se il territorio ospita già una "
-                       "stazione per altri usi, oppure come intervento dimostrativo su "
-                       "pochi mezzi, con approvvigionamento tramite carro bombolaio.")
+            out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno il fabbisogno "
+                       "comunale resta **inferiore al consumo di un solo autobus di linea**, "
+                       f"che si attesta attorno ai {formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg "
+                       "al giorno. Progettare un'infrastruttura fissa per rifornire meno di "
+                       "un mezzo sarebbe un paradosso economico. La conversione resta "
+                       "praticabile solo in forma dimostrativa, con approvvigionamento "
+                       "tramite carro bombolaio o stazione mobile: soluzioni che riducono "
+                       "l'investimento iniziale a una frazione di quello di un impianto "
+                       "fisso, al prezzo di un costo per chilogrammo più alto.")
         out.append("")
 
     # --- alternativa elettrica
@@ -943,6 +974,168 @@ def sezione_flotte(riga) -> str:
                        "prezzo sia coerente con l'offerta effettivamente disponibile sul "
                        "territorio.")
         out.append("")
+
+    return "\n".join(out).strip()
+
+
+
+TESTO_NICCHIE_PREDEFINITO = """### Usi di nicchia (Tool 2.3)
+
+Accanto all'industria e alle flotte esistono impieghi in cui l'idrogeno compete su
+requisiti diversi dal solo costo: la continuità del servizio, l'assenza di rete
+elettrica adeguata, il tempo di rifornimento fra un turno e l'altro. Sono volumi
+contenuti, ma hanno un valore che il conto economico non cattura: rendono la
+tecnologia visibile alla comunità e costruiscono le competenze tecniche
+dell'amministrazione a costi contenuti.
+
+Per questo motivo gli usi di nicchia sono spesso i candidati naturali della prima
+fase di un percorso comunale, anche quando il grosso della domanda sta altrove.
+"""
+
+# Per ogni nicchia: descrizione, colonna del driver fisico, e come si converte
+# quel driver in un fabbisogno annuo di idrogeno.
+DETTAGLIO_NICCHIE = {
+    "T23_FLAG_RIFUGI": {
+        "titolo": "Rifugi e utenze isolate",
+        "testo": "Sono utenze fuori rete, oggi alimentate da generatori diesel il cui "
+                 "combustibile va portato in quota. Una cella a combustibile alimentata "
+                 "da idrogeno prodotto a valle elimina il rumore, le emissioni locali e "
+                 "il rischio di sversamento, ma la logistica di rifornimento resta il "
+                 "vincolo principale: va confrontata con quella attuale del gasolio "
+                 "prima di considerarla un vantaggio.",
+        "driver": "T23_RIFUGI_ELETTRICO_KWH",
+        "unita": "kWh/anno",
+        "kg": lambda v: v / RESA_FUEL_CELL_KWH_KG,
+    },
+    "T23_FLAG_MEZZI_CRITICI": {
+        "titolo": "Mezzi critici e comprensori",
+        "testo": "Battipista, mezzi di soccorso e di protezione civile hanno un requisito "
+                 "che il costo non esprime: devono funzionare quando serve, spesso a "
+                 "temperature rigide e senza possibilità di soste lunghe. È la condizione "
+                 "in cui la batteria perde capacità proprio quando è più necessaria, e in "
+                 "cui il rifornimento rapido dell'idrogeno diventa un requisito operativo "
+                 "prima che una scelta ambientale.",
+        "driver": "T23_GASOLIO_FLOTTA_LITRI_ANNO",
+        "unita": "litri di gasolio/anno",
+        "kg": lambda v: v / LITRI_DIESEL_PER_KG_H2,
+    },
+    "T23_FLAG_COLD_STORAGE": {
+        "titolo": "Logistica del freddo e movimentazione",
+        "testo": "Nei magazzini a ciclo continuo i carrelli elevatori elettrici impongono "
+                 "la sostituzione delle batterie fra un turno e l'altro, con spazi "
+                 "dedicati alla ricarica e tempi morti. La cella a combustibile si "
+                 "rifornisce in pochi minuti e mantiene prestazioni costanti anche in "
+                 "cella frigorifera, dove le batterie perdono capacità. È l'applicazione "
+                 "in cui l'idrogeno ha la storia commerciale più lunga.",
+        "driver": "T23_POTENZA_CARRELLI_KW",
+        "unita": "kW installati",
+        "kg": lambda v: v * ORE_CARRELLO_GIORNO * GIORNI_LOGISTICA * 0.5
+                        / RESA_FUEL_CELL_KWH_KG,
+    },
+    "T23_FLAG_TRENI": {
+        "titolo": "Trasporto ferroviario su tratte non elettrificate",
+        "testo": "Elettrificare una linea costa fra uno e due milioni di euro al "
+                 "chilometro e richiede anni di cantiere. Dove i volumi di traffico non "
+                 "giustificano quell'investimento, l'automotrice a idrogeno consente di "
+                 "eliminare il gasolio senza toccare l'infrastruttura, con un unico punto "
+                 "di rifornimento in deposito. Il confronto va fatto sul costo "
+                 "complessivo di ciclo di vita, non sul solo prezzo del mezzo.",
+        "driver": "T23_TRATTA_NON_ELETTRIFICATA_KM",
+        "unita": "km di tratta",
+        "kg": None,     # serve anche il numero di corse: calcolato a parte
+    },
+    "T23_FLAG_PORTI_AEROPORTI": {
+        "titolo": "Movimentazione portuale e aeroportuale",
+        "testo": "I mezzi di piazzale lavorano a ciclo continuo su percorsi brevi e "
+                 "ripetitivi, rientrando in aree ristrette: è la configurazione ideale "
+                 "per un rifornimento concentrato in pochi punti. La domanda è "
+                 "prevedibile e contrattualizzabile, il che rende questi impianti fra i "
+                 "più facili da finanziare.",
+        "driver": None,
+        "unita": "",
+        "kg": None,
+    },
+    "T23_FLAG_DEPURATORI": {
+        "titolo": "Impianti di depurazione",
+        "testo": "L'aerazione delle vasche assorbe energia in modo costante tutto l'anno, "
+                 "senza le punte tipiche di altre utenze: è un carico di base ideale da "
+                 "accoppiare a una produzione locale. Alcuni impianti producono inoltre "
+                 "biogas, dal quale si può ricavare idrogeno senza passare "
+                 "dall'elettrolisi — una strada che va valutata prima di dimensionare "
+                 "qualunque elettrolizzatore.",
+        "driver": "T23_AERAZIONE_KWH_ANNO",
+        "unita": "kWh/anno",
+        "kg": lambda v: v / RESA_FUEL_CELL_KWH_KG,
+    },
+}
+
+
+def sezione_nicchie(riga) -> str:
+    """Sezione 2.3: usi di nicchia, con stima del fabbisogno dove i driver ci sono."""
+    attive = [c for c in DETTAGLIO_NICCHIE if c in riga.index and vero(riga[c])]
+    if not attive:
+        return ""
+
+    out = [testo_da_template("A23-nicchie_intro_it.md", {}, TESTO_NICCHIE_PREDEFINITO), ""]
+    totale_kg = 0.0
+    stimate = []
+
+    for colonna in attive:
+        info = DETTAGLIO_NICCHIE[colonna]
+        out.append(f"#### {info['titolo']}")
+        out.append(info["testo"])
+
+        kg = None
+        driver = numero(riga.get(info["driver"])) if info["driver"] else None
+
+        if colonna == "T23_FLAG_TRENI":
+            km = numero(riga.get("T23_TRATTA_NON_ELETTRIFICATA_KM"))
+            corse = numero(riga.get("T23_CORSE_GIORNALIERE"))
+            if km and corse:
+                kg = km * corse * 2 * 365 * CONSUMO_TRENO_KG_KM
+                out.append("")
+                out.append(f"La tratta misura {formatta_numero(km)} km e ospita "
+                           f"{formatta_numero(corse)} corse al giorno: considerando il "
+                           "percorso di andata e ritorno, il servizio richiederebbe circa "
+                           f"**{formatta_numero(kg / 1000)} tonnellate di idrogeno all'anno**.")
+        elif driver is not None and info["kg"]:
+            kg = info["kg"](driver)
+            out.append("")
+            out.append(f"Il questionario riporta {formatta_numero(driver)} "
+                       f"{info['unita']}, che corrispondono a circa "
+                       f"**{formatta_numero(kg / 1000)} tonnellate di idrogeno all'anno**.")
+
+        if kg:
+            totale_kg += kg
+            stimate.append((info["titolo"], kg))
+        out.append("")
+
+    if len(stimate) > 1:
+        out.append("#### Peso complessivo degli usi di nicchia")
+        out += ["| Impiego | Fabbisogno stimato |", "| --- | --- |"]
+        out += [f"| {t} | {formatta_numero(k / 1000)} t/anno |" for t, k in stimate]
+        out.append(f"| **Totale** | **{formatta_numero(totale_kg / 1000)} t/anno** |")
+        out.append("")
+
+    if totale_kg:
+        tot_ton = totale_kg / 1000
+        if tot_ton >= SOGLIA_MOBILITA_AUTONOMA_TON:
+            out.append(f"Con {formatta_numero(tot_ton)} t/anno gli usi di nicchia non sono "
+                       "più un contorno: da soli raggiungono la scala di una piccola "
+                       "stazione di rifornimento, e vanno considerati parte della domanda "
+                       "principale.")
+        else:
+            out.append(f"Il totale di {formatta_numero(tot_ton)} t/anno conferma la natura "
+                       "dimostrativa di questi impieghi. Il loro valore sta nell'essere "
+                       "primi passi realizzabili: costruiscono competenza tecnica e "
+                       "consenso, che sono i prerequisiti dei progetti più impegnativi.")
+        out.append("")
+        out.append("> Le stime sopra derivano dai driver fisici dichiarati nel questionario "
+                   f"con parametri di conversione dichiarati: {formatta_numero(RESA_FUEL_CELL_KWH_KG)} "
+                   "kWh elettrici per kg di idrogeno in cella a combustibile, "
+                   f"{formatta_numero(CONSUMO_TRENO_KG_KM)} kg/km per l'automotrice "
+                   "ferroviaria. Sono ordini di grandezza per orientare le priorità, non "
+                   "valori di progetto.")
 
     return "\n".join(out).strip()
 
@@ -1077,18 +1270,9 @@ def testo_percorso_a(riga) -> str:
     out.append(sezione_flotte(riga))
     out.append("")
 
-    # --- 6. usi di nicchia
-    attive = [NICCHIE[c] for c in NICCHIE if c in riga.index and vero(riga[c])]
-    if attive:
-        out.append("### Usi di nicchia")
-        out.append("Il territorio presenta impieghi specifici in cui l'idrogeno compete su "
-                   "requisiti diversi dal solo costo:")
-        out += [f"- {a}" for a in attive]
-        out.append("")
-        out.append("Questi impieghi hanno volumi contenuti ma alto valore dimostrativo: "
-                   "sono i candidati naturali per la prima fase, perché rendono visibile "
-                   "la tecnologia a costi contenuti e costruiscono consenso.")
-        out.append("")
+    # --- 6. usi di nicchia (Tool 2.3)
+    out.append(sezione_nicchie(riga))
+    out.append("")
 
     # --- 7. fabbisogno termico
     termico = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
