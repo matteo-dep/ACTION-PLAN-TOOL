@@ -22,8 +22,8 @@ COL_NOME = "NOME_COMUNE"
 COL_MATURITA = "T11_LIVELLO_MATURITA"
 COL_SCORE = {"A": "T12_SCORE_A", "B": "T12_SCORE_B", "C": "T12_SCORE_C"}
 
-SOGLIE_MATURITA = [(3, 8, "L1"), (9, 14, "L2"), (15, 999, "L3")]
-SOGLIA_MINIMA = 3
+SOGLIE_MATURITA = [(5, 8, "L1"), (9, 14, "L2"), (15, 999, "L3")]
+SOGLIA_MINIMA = 5
 
 # La lettera dominante entra sempre; le altre entrano se raggiungono almeno
 # QUOTA_SECONDARIA del punteggio massimo.
@@ -59,8 +59,10 @@ LITRI_DIESEL_PER_KG_H2 = EFFICIENZA_H2_KM_KG / EFFICIENZA_DIESEL_KM_LITRO
 CO2_EVITATA_KG_PER_KG_H2 = LITRI_DIESEL_PER_KG_H2 * EMISSIONI_DIESEL_KG_LITRO
 
 # Reality check: quanta energia e quanto suolo serve per produrre l'idrogeno
-CONSUMO_ELETTROLISI_KWH_KG = 52.0   # consumo specifico di sistema
-RESA_PV_KWH_KWP = 1250.0            # producibilità media in Friuli Venezia Giulia
+CONSUMO_ELETTROLISI_KWH_KG = 55.0   # consumo specifico di sistema,
+                                    # elettrolisi piu' ausiliari e compressione
+RESA_PV_KWH_KWP = 1200.0            # producibilità media in Friuli Venezia Giulia
+                                    # valore unico condiviso con i tool 2.4 e 2.6
 SUPERFICIE_PV_HA_MWP = 1.3          # fotovoltaico a terra
 SUPERFICIE_CAMPO_CALCIO_MQ = 7140.0
 
@@ -362,6 +364,21 @@ def formatta(valore, colonna: str):
             return f"{testo}%"
         return f"{testo} {unita}".strip()
     return str(valore).strip()
+
+
+def contestazioni(riga) -> str:
+    """Il questionario 2.5 non chiede 'ci sono contestazioni?' ma QUALI tecnologie
+    le hanno generate: il campo contiene 'Eolico', 'Reti Elettriche', 'BESS /
+    Accumuli', 'Idroelettrico'... Trattarlo come un sì/no lo rende sempre falso.
+    Restituisce il testo se indica una contestazione reale, stringa vuota altrimenti.
+    """
+    valore = riga.get("T25_FLAG_CONTESTAZIONI")
+    if is_vuoto(valore):
+        return ""
+    testo = str(valore).strip()
+    if testo.lower() in ("no", "n", "nessuna", "none", "false", "0", "ne"):
+        return ""
+    return testo
 
 
 def vero(valore) -> bool:
@@ -775,6 +792,20 @@ def testo_percorso_a(riga) -> str:
                    f"pari a circa {formatta_numero(kg_giorno)} kg al giorno su "
                    f"{GIORNI_OPERATIVI} giorni operativi.")
         out.append("")
+        # le due componenti misurano cose diverse e non si sovrappongono:
+        # senza dirlo, il lettore sospetta un doppio conteggio
+        if ind and flotta:
+            out.append("Il valore somma due domande di natura diversa, che non si "
+                       "sovrappongono. La **domanda di processo** riguarda l'idrogeno "
+                       "impiegato dentro il ciclo produttivo delle imprese, come materia "
+                       "prima o come combustibile per il calore ad alta temperatura: non "
+                       "comprende i mezzi di quelle stesse aziende. La **domanda di "
+                       "mobilità** riguarda i veicoli, pubblici e privati, censiti "
+                       "separatamente. Sommarle è corretto, ma le due componenti "
+                       "rispondono a logiche distinte: la prima dipende dagli obblighi di "
+                       "decarbonizzazione industriale, la seconda dal ricambio delle "
+                       "flotte.")
+            out.append("")
         out.append("### Ordini di grandezza")
         out += ["| Riferimento | Valore |", "| --- | --- |",
                 f"| Domanda complessiva | {formatta_numero(dom)} t/anno |",
@@ -825,9 +856,11 @@ def testo_percorso_a(riga) -> str:
     if ind and flotta:
         quota_ind = ind / (ind + flotta) * 100
         out.append("### Composizione della domanda")
-        out.append(f"Il comparto produttivo pesa per il {formatta_numero(quota_ind)}% del "
-                   f"totale ({formatta_numero(ind)} t/anno), la flotta per il "
-                   f"{formatta_numero(100 - quota_ind)}% ({formatta_numero(flotta)} t/anno).")
+        out += ["| Componente | Fabbisogno | Quota |", "| --- | --- | --- |",
+                f"| Processi industriali (Tool 2.1) | {formatta_numero(ind)} t/anno | "
+                f"{formatta_numero(quota_ind)}% |",
+                f"| Mobilità e flotte (Tool 2.2) | {formatta_numero(flotta)} t/anno | "
+                f"{formatta_numero(100 - quota_ind)}% |", ""]
         if quota_ind >= 70:
             out.append("La domanda è **trainata dall'industria**: il progetto va costruito "
                        "attorno agli utilizzatori privati, con il Comune nel ruolo di "
@@ -1050,9 +1083,11 @@ def testo_passo3(riga, livello, profilo) -> str:
         out.append("")
 
     vincoli = []
-    if vero(riga.get("T25_FLAG_CONTESTAZIONI")):
-        vincoli.append("Sono presenti contenziosi o opposizioni su impianti rinnovabili: "
-                       "il percorso partecipativo va avviato prima della progettazione.")
+    contestato = contestazioni(riga)
+    if contestato:
+        vincoli.append(f"Sul territorio risultano contestazioni riferite a: "
+                       f"{contestato}. Il percorso partecipativo va avviato prima "
+                       "della progettazione, non dopo.")
     cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
     taglia = numero(riga.get("T26_TAGLIA_ELETTROLIZZATORE_MW"))
     if cap_rete is not None and taglia is not None and taglia > cap_rete:

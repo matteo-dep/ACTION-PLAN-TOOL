@@ -89,16 +89,37 @@ def blocchi_markdown(md: str):
 
 
 def spezza_grassetto(testo: str):
-    """['testo normale', ('grassetto', True), ...] -> [(testo, bold), ...]"""
+    """Scompone il testo in (frammento, grassetto, url).
+
+    I link markdown vengono prima messi da parte con un segnaposto: se si
+    dividesse subito la stringa sui link, un collegamento scritto dentro un
+    blocco in grassetto lascerebbe asterischi orfani nel documento.
+    """
+    link = []
+
+    def _cattura(m):
+        link.append((m.group(1), m.group(2)))
+        return f"\x00{len(link) - 1}\x00"
+
+    testo = re.sub(r"\[([^\]]+)\]\(((?:https?://|mailto:)[^)]+)\)", _cattura, testo)
+
     parti = []
-    for parte in re.split(r"(\*\*.+?\*\*)", testo):
-        if not parte:
+    for pezzo in re.split(r"(\*\*.+?\*\*)", testo):
+        if not pezzo:
             continue
-        if parte.startswith("**") and parte.endswith("**"):
-            parti.append((parte[2:-2], True))
-        else:
-            parti.append((parte, False))
+        grassetto = pezzo.startswith("**") and pezzo.endswith("**")
+        if grassetto:
+            pezzo = pezzo[2:-2]
+        for frammento in re.split(r"\x00(\d+)\x00", pezzo):
+            if frammento == "":
+                continue
+            if frammento.isdigit() and int(frammento) < len(link):
+                etichetta, url = link[int(frammento)]
+                parti.append((etichetta, grassetto, url))
+            else:
+                parti.append((frammento.replace("**", ""), grassetto, None))
     return parti
+
 
 # =============================================================================
 # PDF
@@ -183,9 +204,14 @@ class H2ReadyPDF(FPDF):
 
 
 def _pdf_inline(pdf, testo, size, h):
-    for parte, grassetto in spezza_grassetto(testo):
+    for parte, grassetto, url in spezza_grassetto(testo):
         pdf.font("B" if grassetto else "", size)
-        pdf.write(h, pdf.txt(parte))
+        if url:
+            pdf.set_text_color(*BLU)
+            pdf.write(h, pdf.txt(parte), link=url)
+            pdf.set_text_color(0, 0, 0)
+        else:
+            pdf.write(h, pdf.txt(parte))
     pdf.ln(h)
 
 
@@ -215,6 +241,11 @@ def _pdf_tabella(pdf, dati):
 
     pdf.font("", 9)
     pdf.set_draw_color(190, 198, 214)
+    # lo stato di riempimento resta quello impostato altrove (le pagine divisorie
+    # lo lasciano sul blu pieno): va riportato al bianco, altrimenti le celle
+    # escono con il fondo scuro e il testo diventa illeggibile
+    pdf.set_fill_color(255, 255, 255)
+    pdf.set_text_color(0, 0, 0)
     with pdf.table(col_widths=tuple(pesi),
                    text_align=tuple("LEFT" if j == 0 else
                                     ("RIGHT" if n <= 3 else "LEFT")
@@ -222,8 +253,7 @@ def _pdf_tabella(pdf, dati):
                    line_height=5,
                    padding=1.6,
                    headings_style=_intestazione_tabella(pdf),
-                   cell_fill_color=(246, 248, 252),
-                   cell_fill_mode="ROWS") as tabella:
+                   cell_fill_mode="NONE") as tabella:
         for i, riga in enumerate(dati):
             fila = tabella.row()
             for cella in riga:
@@ -233,13 +263,16 @@ def _pdf_tabella(pdf, dati):
 
 
 def _senza_grassetto(testo) -> str:
-    """Nelle celle il markdown non viene interpretato: tolgo i doppi asterischi."""
-    return re.sub(r"\*\*(.+?)\*\*", r"\1", str(testo))
+    """Nelle celle il markdown non viene interpretato: resta il solo testo."""
+    pulito = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", str(testo))
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", pulito)
 
 
 def _intestazione_tabella(pdf):
+    """Intestazione su fondo chiaro: il testo bianco su blu pieno risulta poco
+    leggibile in stampa e nelle esportazioni a bassa risoluzione."""
     from fpdf.fonts import FontFace
-    return FontFace(emphasis="BOLD", color=(255, 255, 255), fill_color=BLU)
+    return FontFace(emphasis="BOLD", color=BLU, fill_color=(226, 232, 243))
 
 
 def scrivi_markdown_pdf(pdf, md: str):
@@ -405,11 +438,39 @@ def _stili(doc):
         stile.font.color.rgb = RGBColor(*BLU)
 
 
+def _aggiungi_link(paragrafo, testo, url, grassetto=False):
+    """Un collegamento ipertestuale in Word: python-docx non ha un'API dedicata,
+    va costruito a mano nel documento XML."""
+    parte = paragrafo.part
+    r_id = parte.relate_to(url,
+                           "http://schemas.openxmlformats.org/officeDocument/2006/"
+                           "relationships/hyperlink", is_external=True)
+    link = OxmlElement("w:hyperlink")
+    link.set(qn("r:id"), r_id)
+    run = OxmlElement("w:r")
+    prop = OxmlElement("w:rPr")
+    colore = OxmlElement("w:color"); colore.set(qn("w:val"), BLU_HEX)
+    sottolineato = OxmlElement("w:u"); sottolineato.set(qn("w:val"), "single")
+    prop.append(colore); prop.append(sottolineato)
+    if grassetto:
+        prop.append(OxmlElement("w:b"))
+    run.append(prop)
+    testo_el = OxmlElement("w:t")
+    testo_el.set(qn("xml:space"), "preserve")
+    testo_el.text = testo
+    run.append(testo_el)
+    link.append(run)
+    paragrafo._p.append(link)
+
+
 def _paragrafo_con_grassetto(doc, testo, stile=None):
     p = doc.add_paragraph(style=stile)
-    for parte, grassetto in spezza_grassetto(testo):
-        run = p.add_run(parte)
-        run.bold = grassetto
+    for parte, grassetto, url in spezza_grassetto(testo):
+        if url:
+            _aggiungi_link(p, parte, url, grassetto)
+        else:
+            run = p.add_run(parte)
+            run.bold = grassetto
     return p
 
 
@@ -440,10 +501,9 @@ def scrivi_markdown_docx(doc, md: str):
                     run.font.size = Pt(9.5)
                     if i == 0:
                         run.bold = True
-                        run.font.color.rgb = RGBColor(255, 255, 255)
-                        _ombreggia(cella, BLU_HEX)
-                    elif i % 2 == 0:
-                        _ombreggia(cella, "F6F8FC")
+                        run.font.color.rgb = RGBColor(*BLU)
+                        _ombreggia(cella, "E2E8F3")
+
             doc.add_paragraph()
         elif tipo == "riga":
             doc.add_paragraph("_" * 60)
