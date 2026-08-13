@@ -62,14 +62,52 @@ SOGLIA_MOBILITA_AUTONOMA_TON = 30.0
 SOGLIA_MOBILITA_MINIMA_TON = 8.0
 
 CONSUMO_BUS_KG_GIORNO = 26.0        # bus urbano da 12 m, 250 km/giorno
-GIORNI_OPERATIVI = 300              # giorni di servizio in un anno
+
+# I giorni di esercizio cambiano radicalmente da un'utenza all'altra: usarne uno
+# solo sovrastima le scuole del 60% e sottostima l'industria continua del 15%.
+GIORNI_OPERATIVI = 300              # trasporto pubblico e flotte comunali
+GIORNI_INDUSTRIA_CONTINUA = 340     # vetro, acciaio, raffinazione: ciclo continuo
+GIORNI_SCUOLE = 190                 # riscaldamento scolastico in zona climatica E/F
+GIORNI_LOGISTICA = 250              # magazzini e movimentazione
 EFFICIENZA_H2_KM_KG = 11.4          # mezzo pesante stradale
 EFFICIENZA_DIESEL_KM_LITRO = 3.5    # mezzo pesante stradale
 EMISSIONI_DIESEL_KG_LITRO = 2.7     # kgCO2 per litro di gasolio
 
 # 1 kg di H2 sostituisce EFFICIENZA_H2_KM_KG / EFFICIENZA_DIESEL_KM_LITRO litri
 LITRI_DIESEL_PER_KG_H2 = EFFICIENZA_H2_KM_KG / EFFICIENZA_DIESEL_KM_LITRO
-CO2_EVITATA_KG_PER_KG_H2 = LITRI_DIESEL_PER_KG_H2 * EMISSIONI_DIESEL_KG_LITRO
+CO2_DIESEL_SOSTITUITO_KG_KG_H2 = LITRI_DIESEL_PER_KG_H2 * EMISSIONI_DIESEL_KG_LITRO
+
+# --- Emissioni dell'idrogeno prodotto ---------------------------------------
+# Un chilogrammo di idrogeno non è mai a zero emissioni: dipende da come viene
+# prodotto. Con elettricità di rete non certificata servono circa 55 kWh, che
+# alle emissioni medie del sistema elettrico italiano valgono più di 14 kg di
+# CO2 — peggio dell'idrogeno grigio da metano. Solo la quota certificata RFNBO
+# rientra nella soglia europea.
+FATTORE_RETE_KG_CO2_KWH = 0.26        # mix elettrico nazionale
+SOGLIA_RFNBO_KG_CO2_KG_H2 = 3.38      # limite RED III per l'idrogeno rinnovabile
+
+
+def emissioni_h2(quota_rfnbo_perc=None) -> float:
+    """kg di CO2 per kg di idrogeno prodotto, secondo la quota certificata.
+
+    Se la quota non è nota si assume il caso peggiore, cioè produzione da rete
+    non certificata: è la sola ipotesi prudente quando manca il dato.
+    """
+    quota = (quota_rfnbo_perc or 0.0) / 100.0
+    quota = min(max(quota, 0.0), 1.0)
+    da_rete = FATTORE_RETE_KG_CO2_KWH * CONSUMO_ELETTROLISI_KWH_KG
+    return quota * SOGLIA_RFNBO_KG_CO2_KG_H2 + (1 - quota) * da_rete
+
+
+def co2_evitata_kg_per_kg_h2(riga=None) -> float:
+    """Emissioni realmente evitate sostituendo gasolio con idrogeno.
+
+    È la differenza fra ciò che si smette di emettere e ciò che si emette per
+    produrre l'idrogeno: può essere negativa, e in quel caso la sostituzione
+    peggiora il bilancio invece di migliorarlo.
+    """
+    quota = numero(riga.get("T26_QUOTA_RFNBO_PERC")) if riga is not None else None
+    return CO2_DIESEL_SOSTITUITO_KG_KG_H2 - emissioni_h2(quota)
 
 # Reality check: quanta energia e quanto suolo serve per produrre l'idrogeno
 CONSUMO_ELETTROLISI_KWH_KG = 55.0   # consumo specifico di sistema,
@@ -87,7 +125,13 @@ SUPERFICIE_CAMPO_CALCIO_MQ = 7140.0
 # documento perché il risultato dipende quasi solo da questi tre numeri.
 PCI_H2_KWH_KG = 33.3             # potere calorifico inferiore dell'idrogeno
 RENDIMENTO_CALDAIA_H2 = 0.90     # caldaia a condensazione alimentata a idrogeno
-COP_POMPA_CALORE = 3.5           # coefficiente di prestazione stagionale medio
+# Il coefficiente di prestazione di una pompa di calore ad aria dipende dal clima:
+# in pianura la media stagionale si attesta attorno a 3,5, ma in zona climatica F
+# con temperature di progetto sotto i -5 °C scende a 2,0-2,2. La differenza non
+# cambia il confronto con l'idrogeno, ma cambia molto il picco di carico che la
+# rete elettrica locale deve reggere nelle giornate più fredde.
+COP_POMPA_CALORE = 3.5           # media stagionale in pianura
+COP_POMPA_CALORE_MONTAGNA = 2.2  # zona climatica F, giornate di progetto
 
 # --- Parametri per la stima dei fabbisogni di nicchia (Tool 2.3) -------------
 # Conversioni usate per tradurre i driver fisici raccolti dal questionario in
@@ -96,8 +140,17 @@ COP_POMPA_CALORE = 3.5           # coefficiente di prestazione stagionale medio
 # flotta, non a dimensionare un impianto.
 RESA_FUEL_CELL_KWH_KG = 17.0     # kWh elettrici da 1 kg di H2 (PEMFC, ~50%)
 CONSUMO_TRENO_KG_KM = 0.25       # automotrice a idrogeno su tratta regionale
-ORE_CARRELLO_GIORNO = 8.0        # turno tipico di un carrello elevatore
-GIORNI_LOGISTICA = 250           # giorni operativi di un magazzino
+# Carrello elevatore a celle a combustibile: si misura in ore di servizio, non
+# in potenza installata. Nella logistica del freddo i mezzi restano in moto anche
+# a vuoto, per evitare il congelamento di impianti idraulici e ausiliari.
+ORE_CARRELLO_GIORNO = 8.0        # turno tipico
+CONSUMO_CARRELLO_KG_ORA = 0.20   # consumo medio di un carrello FC in esercizio
+FATTORE_CARICO_FREDDO = 0.80     # quota del turno effettivamente in movimento
+
+# Mezzi a ciclo di lavoro gravoso (battipista, soccorso): il confronto va fatto
+# sui litri consumati, non sui chilometri, perché lavorano ad alta coppia e con
+# lunghi stazionamenti a motore acceso.
+LITRI_DIESEL_PER_KG_H2_GRAVOSO = 3.2
 
 # Sinergia depuratore-elettrolizzatore. L'elettrolisi produce 8 kg di ossigeno
 # per ogni kg di idrogeno: è il reagente che il depuratore oggi ottiene
@@ -1039,7 +1092,7 @@ DETTAGLIO_NICCHIE = {
                  "prima che una scelta ambientale.",
         "driver": "T23_GASOLIO_FLOTTA_LITRI_ANNO",
         "unita": "litri di gasolio/anno",
-        "kg": lambda v: v / LITRI_DIESEL_PER_KG_H2,
+        "kg": lambda v: v / LITRI_DIESEL_PER_KG_H2_GRAVOSO,
     },
     "T23_FLAG_COLD_STORAGE": {
         "titolo": "Logistica del freddo e movimentazione",
@@ -1049,10 +1102,10 @@ DETTAGLIO_NICCHIE = {
                  "rifornisce in pochi minuti e mantiene prestazioni costanti anche in "
                  "cella frigorifera, dove le batterie perdono capacità. È l'applicazione "
                  "in cui l'idrogeno ha la storia commerciale più lunga.",
-        "driver": "T23_POTENZA_CARRELLI_KW",
-        "unita": "kW installati",
-        "kg": lambda v: v * ORE_CARRELLO_GIORNO * GIORNI_LOGISTICA * 0.5
-                        / RESA_FUEL_CELL_KWH_KG,
+        "driver": "T23_N_CARRELLI",
+        "unita": "carrelli",
+        "kg": lambda v: v * CONSUMO_CARRELLO_KG_ORA * ORE_CARRELLO_GIORNO
+                        * FATTORE_CARICO_FREDDO * GIORNI_LOGISTICA,
     },
     "T23_FLAG_TRENI": {
         "titolo": "Trasporto ferroviario su tratte non elettrificate",
@@ -1271,6 +1324,10 @@ def sezione_termico(riga) -> str:
                 f"| Elettricità necessaria | {formatta_numero(round(elettrico_h2))} kWh/anno | "
                 f"{formatta_numero(round(elettrico_pdc))} kWh/anno |", ""]
 
+        elettrico_pdc_freddo = termico / COP_POMPA_CALORE_MONTAGNA
+        rapporto_freddo = elettrico_h2 / elettrico_pdc_freddo if elettrico_pdc_freddo else None
+        maggiorazione = (elettrico_pdc_freddo / elettrico_pdc - 1) * 100 if elettrico_pdc else 0
+
         if rapporto:
             out.append(f"A parità di calore prodotto, la via dell'idrogeno consuma "
                        f"**{formatta_numero(rapporto)} volte l'energia elettrica** della "
@@ -1278,6 +1335,23 @@ def sezione_termico(riga) -> str:
                        "tecnologico possa colmare: discende dal fatto che la pompa di "
                        "calore sposta calore già presente nell'ambiente, mentre "
                        "l'elettrolisi lo produce da capo passando per la molecola.")
+            out.append("")
+            out.append("#### Effetto del clima")
+            out.append(f"Il confronto sopra assume un coefficiente di prestazione stagionale "
+                       f"di {formatta_numero(COP_POMPA_CALORE)}, valore corrente in pianura. "
+                       f"In zona climatica F, con temperature di progetto sotto i -5 °C, la "
+                       f"stessa macchina scende attorno a "
+                       f"{formatta_numero(COP_POMPA_CALORE_MONTAGNA)}: il vantaggio "
+                       f"sull'idrogeno resta netto ({formatta_numero(rapporto_freddo)} volte), "
+                       f"ma il fabbisogno elettrico sale a "
+                       f"{formatta_numero(round(elettrico_pdc_freddo))} kWh/anno, con una "
+                       f"maggiorazione del {formatta_numero(maggiorazione)}%.")
+            out.append("")
+            out.append("È il dato che conta davvero per l'amministrazione: non l'efficienza "
+                       "in sé, ma il picco di potenza che la rete elettrica locale deve "
+                       "reggere proprio nei giorni in cui è più sollecitata. Prima di "
+                       "elettrificare un patrimonio edilizio in quota va verificata con il "
+                       "distributore la capacità disponibile nelle ore critiche.")
             out.append("")
             out.append("> Confronto condotto con un potere calorifico di "
                        f"{formatta_numero(PCI_H2_KWH_KG)} kWh/kg, un rendimento di caldaia "
@@ -1372,7 +1446,10 @@ def testo_percorso_a(riga) -> str:
         kg_giorno = dom * 1000 / GIORNI_OPERATIVI
         bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
         litri = dom * 1000 * LITRI_DIESEL_PER_KG_H2
-        co2 = dom * CO2_EVITATA_KG_PER_KG_H2      # t/anno (kg per kg = t per t)
+        # kg per kg equivale a t per t: il rapporto non cambia con l'unità
+        co2_unit = co2_evitata_kg_per_kg_h2(riga)
+        co2 = dom * co2_unit
+        quota_rfnbo = numero(riga.get("T26_QUOTA_RFNBO_PERC"))
         out.append(f"La domanda potenziale complessiva individuata sul territorio comunale "
                    f"ammonta a **{formatta_numero(dom)} tonnellate di idrogeno all'anno**, "
                    f"pari a circa {formatta_numero(kg_giorno)} kg al giorno su "
@@ -1398,7 +1475,30 @@ def testo_percorso_a(riga) -> str:
                 f"| Erogazione media giornaliera | {formatta_numero(kg_giorno)} kg/giorno |",
                 f"| Equivalente in autobus urbani alimentabili | {formatta_numero(bus_eq)} mezzi |",
                 f"| Gasolio sostituito | {formatta_numero(litri)} litri/anno |",
-                f"| Emissioni evitate allo scarico | {formatta_numero(co2)} tCO2/anno |", ""]
+                f"| Emissioni evitate al netto della produzione | {formatta_numero(co2)} tCO2/anno |", ""]
+        if quota_rfnbo is None:
+            out.append("> **Le emissioni evitate sono calcolate nell'ipotesi peggiore**, "
+                       "cioè idrogeno prodotto con elettricità di rete non certificata: in "
+                       f"quel caso ogni chilogrammo ne costa {formatta_numero(emissioni_h2(None))} "
+                       "di CO2, più dell'idrogeno da metano. Il percorso B, se sviluppato, "
+                       "restituisce la quota effettivamente conforme ai criteri RFNBO e il "
+                       "bilancio va ricalcolato su quella.")
+            out.append("")
+        elif quota_rfnbo < 100:
+            out.append(f"> Il calcolo tiene conto che solo il {formatta_numero(quota_rfnbo)}% "
+                       "dell'idrogeno risulta conforme ai criteri RFNBO: la parte restante "
+                       "viene prodotta con elettricità di rete e porta con sé "
+                       f"{formatta_numero(FATTORE_RETE_KG_CO2_KWH * CONSUMO_ELETTROLISI_KWH_KG)} "
+                       "kg di CO2 per kg di idrogeno.")
+            out.append("")
+        if co2_unit <= 0:
+            out.append("**La sostituzione peggiora il bilancio delle emissioni.** Con "
+                       "l'idrogeno prodotto nelle condizioni ipotizzate, ogni chilogrammo "
+                       "emette più CO2 del gasolio che sostituisce. Non è un difetto della "
+                       "tecnologia ma della sua alimentazione: finché l'elettrolisi non è "
+                       "certificata rinnovabile, la conversione dei mezzi non produce alcun "
+                       "beneficio climatico.")
+            out.append("")
         out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
                    f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
                    f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "

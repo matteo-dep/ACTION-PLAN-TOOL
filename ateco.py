@@ -14,8 +14,19 @@ Per aggiungere un settore basta inserire una riga in ATECO: la ricerca avviene
 per prefisso, quindi "24.10" copre 24.10.00, 24.10.10 e così via.
 
 `peso` è usato solo per ripartire in modo indicativo un fabbisogno aggregato fra
-più aziende quando il dato per singola impresa non è disponibile: è un ordine di
-grandezza relativo dell'intensità di idrogeno, non un consumo specifico.
+più aziende quando il dato per singola impresa non è disponibile.
+
+La scala è deliberatamente asimmetrica, perché lo è la realtà industriale: fra chi
+impiega l'idrogeno come materia prima e chi lo brucia per scaldare un forno corre
+un divario di due ordini di grandezza. Un'acciaieria primaria convertita al ciclo
+DRI richiede intorno alle 200.000 tonnellate di idrogeno all'anno, una raffineria
+o un impianto petrolchimico circa 30.000, mentre una vetreria medio-grande che
+converte interamente i propri forni si ferma attorno alle 1.300. Ripartire un
+totale con pesi simili fra loro attribuirebbe alla vetreria una quota decine di
+volte superiore a quella reale.
+
+`giorni` indica i giorni di esercizio annui del settore: l'industria di processo
+lavora in continuo, la manifattura leggera no.
 """
 
 FEEDSTOCK = "Feedstock chimico"
@@ -96,128 +107,128 @@ VERDETTI = {
                  "dove pompe di calore e resistenze sono nettamente più efficienti.",
 }
 
-# (prefisso ATECO, settore, descrizione del processo, temperatura, categoria, peso)
+# (prefisso, settore, processo, temperatura, categoria, peso, giorni di esercizio)
 ATECO = [
     # --- Siderurgia e metallurgia
     ("24.10", "Siderurgia primaria",
      "riduzione del minerale di ferro; l'idrogeno sostituisce il carbone come agente "
      "riducente nel processo DRI",
-     "1.100-1.500 °C", FEEDSTOCK, 5.0),
+     "1.100-1.500 °C", FEEDSTOCK, 150.0, 350),
     ("24.20", "Tubi e profilati in acciaio",
      "riscaldo dei semilavorati e trattamenti termici in forno",
-     "900-1.250 °C", ALTA_TEMP, 2.0),
+     "900-1.250 °C", ALTA_TEMP, 4.0, 330),
     ("24.3", "Prima trasformazione dell'acciaio",
      "ricottura e zincatura a caldo, con forni a fiamma diretta",
-     "700-1.100 °C", ALTA_TEMP, 1.5),
+     "700-1.100 °C", ALTA_TEMP, 3.0, 330),
     ("24.42", "Produzione di alluminio",
      "fusione e mantenimento del bagno metallico",
-     "700-960 °C", ALTA_TEMP, 2.0),
+     "700-960 °C", ALTA_TEMP, 4.0, 340),
     ("24.4", "Metallurgia dei metalli non ferrosi",
      "fusione e affinazione di rame, piombo, zinco e leghe",
-     "700-1.200 °C", ALTA_TEMP, 2.0),
+     "700-1.200 °C", ALTA_TEMP, 4.0, 340),
     ("24.5", "Fonderie",
      "fusione di ghisa, acciaio o leghe leggere in forno",
-     "700-1.500 °C", ALTA_TEMP, 2.0),
+     "700-1.500 °C", ALTA_TEMP, 4.0, 300),
 
     # --- Chimica e raffinazione
     ("19.20", "Raffinazione del petrolio",
      "idrotrattamento e desolforazione, dove l'idrogeno è reagente di processo",
-     "300-400 °C", FEEDSTOCK, 5.0),
+     "300-400 °C", FEEDSTOCK, 100.0, 350),
     ("20.11", "Gas industriali",
      "produzione e liquefazione di gas tecnici, fra cui l'idrogeno stesso",
-     "processo", FEEDSTOCK, 4.0),
+     "processo", FEEDSTOCK, 60.0, 350),
     ("20.15", "Fertilizzanti e composti azotati",
      "sintesi dell'ammoniaca: l'idrogeno è il reagente principale del processo "
      "Haber-Bosch",
-     "400-500 °C", FEEDSTOCK, 5.0),
+     "400-500 °C", FEEDSTOCK, 100.0, 350),
     ("20.14", "Chimica organica di base",
      "sintesi di metanolo e intermedi organici a partire da gas di sintesi",
-     "200-400 °C", FEEDSTOCK, 4.0),
+     "200-400 °C", FEEDSTOCK, 80.0, 350),
     ("20.1", "Chimica di base",
      "processi di sintesi che impiegano idrogeno come reagente o come vettore termico",
-     "200-500 °C", FEEDSTOCK, 3.5),
+     "200-500 °C", FEEDSTOCK, 50.0, 350),
     ("20.5", "Altri prodotti chimici",
      "idrogenazione di oli e grassi e sintesi di specialità chimiche",
-     "150-250 °C", MARGINALE, 2.0),
+     "150-250 °C", MARGINALE, 6.0, 330),
     ("21.", "Farmaceutica",
      "idrogenazione catalitica nella sintesi di principi attivi",
-     "100-250 °C", MARGINALE, 1.5),
+     "100-250 °C", MARGINALE, 4.0, 330),
 
     # --- Minerali non metalliferi
     ("23.11", "Vetro piano",
      "forno fusorio a bacino in esercizio continuo",
-     "1.500-1.600 °C", ALTA_TEMP, 3.5),
+     "1.500-1.600 °C", ALTA_TEMP, 5.0, 350),
     ("23.13", "Vetro cavo",
      "fusione della miscela vetrificabile e condizionamento del vetro fuso",
-     "1.400-1.550 °C", ALTA_TEMP, 3.5),
+     "1.400-1.550 °C", ALTA_TEMP, 5.0, 350),
     ("23.1", "Industria del vetro",
      "fusione in forno con fiamma diretta sul bagno di vetro",
-     "1.400-1.600 °C", ALTA_TEMP, 3.5),
+     "1.400-1.600 °C", ALTA_TEMP, 5.0, 350),
     ("23.20", "Materiali refrattari",
      "cottura di prodotti refrattari in forno a tunnel",
-     "1.300-1.700 °C", ALTA_TEMP, 2.5),
+     "1.300-1.700 °C", ALTA_TEMP, 3.0, 340),
     ("23.3", "Laterizi e materiali per l'edilizia",
      "essiccazione e cottura di laterizi in forno continuo",
-     "900-1.100 °C", ALTA_TEMP, 2.0),
+     "900-1.100 °C", ALTA_TEMP, 3.0, 330),
     ("23.4", "Ceramica e porcellana",
      "cottura di prodotti ceramici e smaltatura",
-     "1.000-1.250 °C", ALTA_TEMP, 2.0),
+     "1.000-1.250 °C", ALTA_TEMP, 3.0, 330),
     ("23.51", "Cemento",
      "calcinazione del clinker in forno rotativo; resta la quota di CO2 di processo, "
      "che l'idrogeno non elimina",
-     "1.400-1.500 °C", ALTA_TEMP, 3.0),
+     "1.400-1.500 °C", ALTA_TEMP, 3.0, 340),
     ("23.52", "Calce e gesso",
      "calcinazione del carbonato di calcio in forno verticale o rotativo",
-     "900-1.100 °C", ALTA_TEMP, 2.5),
+     "900-1.100 °C", ALTA_TEMP, 3.0, 340),
 
     # --- Carta, legno, tessile, alimentare
     ("17.1", "Pasta-carta e cartiere",
      "produzione di vapore di processo e essiccazione del foglio",
-     "150-250 °C", MARGINALE, 1.5),
+     "150-250 °C", MARGINALE, 4.0, 340),
     ("17.2", "Articoli di carta e cartone",
      "essiccazione e trasformazione, con calore a media temperatura",
-     "100-200 °C", ELETTRIFICA, 0.8),
+     "100-200 °C", ELETTRIFICA, 1.0, 300),
     ("13.", "Industria tessile",
      "tintura, finissaggio e essiccazione con vapore",
-     "100-200 °C", ELETTRIFICA, 0.8),
+     "100-200 °C", ELETTRIFICA, 1.0, 300),
     ("16.", "Industria del legno",
      "essiccazione del legname in cella",
-     "60-120 °C", ELETTRIFICA, 0.5),
+     "60-120 °C", ELETTRIFICA, 0.6, 250),
     ("10.", "Industria alimentare",
      "cottura, pastorizzazione ed essiccazione",
-     "80-180 °C", ELETTRIFICA, 0.6),
+     "80-180 °C", ELETTRIFICA, 0.8, 300),
     ("11.", "Industria delle bevande",
      "processi di cottura e sterilizzazione",
-     "80-150 °C", ELETTRIFICA, 0.6),
+     "80-150 °C", ELETTRIFICA, 0.8, 300),
 
     # --- Meccanica e trasformazione
     ("25.6", "Trattamento e rivestimento dei metalli",
      "trattamenti termici in atmosfera controllata, dove l'idrogeno è già impiegato "
      "come gas di processo",
-     "700-1.100 °C", FEEDSTOCK, 2.0),
+     "700-1.100 °C", FEEDSTOCK, 8.0, 330),
     ("25.", "Prodotti in metallo",
      "lavorazioni meccaniche con fabbisogno termico limitato",
-     "variabile", MARGINALE, 1.0),
+     "variabile", MARGINALE, 1.5, 250),
     ("28.", "Fabbricazione di macchinari",
      "assemblaggio e lavorazioni a freddo",
-     "ambiente", ELETTRIFICA, 0.4),
+     "ambiente", ELETTRIFICA, 0.5, 250),
     ("22.", "Gomma e materie plastiche",
      "estrusione e stampaggio con riscaldamento elettrico prevalente",
-     "150-300 °C", ELETTRIFICA, 0.6),
+     "150-300 °C", ELETTRIFICA, 0.8, 300),
 
     # --- Servizi e logistica
     ("49.4", "Trasporto merci su strada",
      "trazione di mezzi pesanti su lunga percorrenza",
-     "n.a.", ALTA_TEMP, 2.0),
+     "n.a.", ALTA_TEMP, 5.0, 300),
     ("52.", "Magazzinaggio e logistica",
      "movimentazione con carrelli elevatori a ciclo continuo",
-     "n.a.", MARGINALE, 1.0),
+     "n.a.", MARGINALE, 1.5, 300),
     ("35.", "Fornitura di energia",
      "generazione elettrica di bilanciamento e accumulo stagionale",
-     "n.a.", MARGINALE, 1.5),
+     "n.a.", MARGINALE, 2.0, 340),
     ("38.", "Trattamento dei rifiuti",
      "termovalorizzazione e trattamento con recupero energetico",
-     "800-1.100 °C", MARGINALE, 1.0),
+     "800-1.100 °C", MARGINALE, 2.0, 340),
 ]
 
 
@@ -234,15 +245,16 @@ def normalizza(codice) -> str:
 
 
 def cerca(codice):
-    """Restituisce (settore, processo, temperatura, categoria, peso) o None."""
+    """Restituisce (settore, processo, temperatura, categoria, peso, giorni) o None."""
     testo = normalizza(codice)
     if not testo:
         return None
     migliore = None
-    for prefisso, settore, processo, temperatura, categoria, peso in ATECO:
+    for voce in ATECO:
+        prefisso = voce[0]
         if testo.startswith(prefisso):
             if migliore is None or len(prefisso) > len(migliore[0]):
-                migliore = (prefisso, settore, processo, temperatura, categoria, peso)
+                migliore = voce
     if migliore is None:
         return None
     return migliore[1:]
@@ -253,7 +265,7 @@ def descrizione(codice) -> str:
     trovato = cerca(codice)
     if not trovato:
         return "Processo non classificato: verificare il codice ATECO."
-    settore, processo, temperatura, _, _ = trovato
+    settore, processo, temperatura = trovato[0], trovato[1], trovato[2]
     if temperatura in ("n.a.", "processo", "ambiente", "variabile"):
         return f"{settore}: {processo}."
     return f"{settore}: {processo} ({temperatura})."
@@ -269,3 +281,9 @@ def verdetto(codice) -> str:
 def peso(codice) -> float:
     trovato = cerca(codice)
     return trovato[4] if trovato else 1.0
+
+
+def giorni_esercizio(codice) -> int:
+    """Giorni di lavoro annui del settore: l'industria di processo non si ferma."""
+    trovato = cerca(codice)
+    return trovato[5] if trovato and len(trovato) > 5 else 300
