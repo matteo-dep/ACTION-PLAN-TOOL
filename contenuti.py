@@ -200,26 +200,9 @@ PERCORSI = [
         "codice": "B",
         "titolo": "Percorso B - Offerta e produzione",
         "blocchi": [
-            ("Rinnovabili e aree disponibili (Tool 2.5)", [
-                "T25_FER_INSTALLATA_MW", "T25_SAU_OCCUPATA_PERC", "T25_PIPELINE_ISTANZE",
-                "T25_PROGETTI_AUTORIZZATI", "T25_FLAG_CONTESTAZIONI", "T25_AREE_IDONEE_MQ",
-                "T25_SUP_BROWNFIELD_MQ", "T25_SUP_TETTI_IND_MQ", "T25_SUP_TETTI_CIV_MQ",
-                "T25_SUP_INCOLTE_MQ", "T25_SUP_SAU_MQ", "T25_SUP_SERVITU_MQ",
-                "T25_DISTANZA_CABINA_PRIMARIA_KM", "T25_CAPACITA_RESIDUA_MW",
-                "T25_ENTRO_5KM_DORSALE", "T25_SUP_PUBBLICA_MQ",
-                "T25_PV_TERRA_INSTALLATO_MW", "T25_PROGRAMMABILI_MW",
-                "T25_FLAG_EOLICO_IDONEO", "T25_FLAG_DISPACCIAMENTO"]),
-            ("Dimensionamento dell'impianto (Tool 2.6)", [
-                "T26_MODALITA", "T26_ZONA", "T26_TARGET_H2_TON", "T26_PV_TERRA_MW",
-                "T26_PV_TETTI_MW", "T26_PV_CAPANNONI_MW", "T26_EOLICO_MW",
-                "T26_TAGLIA_FER_INSTALLATA_MW", "T26_TAGLIA_ELETTROLIZZATORE_MW",
-                "T26_CAPACITA_BESS_MWH", "T26_PRODUZIONE_H2_TON_ANNO",
-                "T26_QUOTA_RFNBO_PERC", "T26_CURTAILMENT_PERC", "T26_COPERTURA_PERC"]),
-            ("Sostenibilità economica della produzione", [
-                "T26_CAPEX_CONNESSIONI_EURO", "T26_CAPEX_TOTALE_MLN", "T26_LCOH_EURO_KG",
-                "T26_PAYBACK_ANNI", "T26_CO2_EVITATA_TON_ANNO"]),
-            ("Superfici impegnate", [
-                "T26B_SUP_TERRA_HA", "T26B_SUP_TETTI_M2", "T26B_SUP_CAPANNONI_M2"]),
+            ("Altri parametri di produzione", [
+                "T26_ZONA", "T26_TARGET_H2_TON", "T26_CO2_EVITATA_TON_ANNO",
+                "T26B_SUP_TETTI_M2", "T26B_SUP_CAPANNONI_M2"]),
         ],
     },
     {
@@ -258,7 +241,19 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T23_TRATTA_NON_ELETTRIFICATA_KM", "T23_CORSE_GIORNALIERE",
            "T23_AERAZIONE_KWH_ANNO", "T23_N_MEZZI_SPECIALI", "T23_MEZZI_FUEL_CELL",
            "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
-           "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO"}
+           "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO",
+           "T25_FER_INSTALLATA_MW", "T25_SAU_OCCUPATA_PERC", "T25_PIPELINE_ISTANZE",
+           "T25_PROGETTI_AUTORIZZATI", "T25_FLAG_CONTESTAZIONI",
+           "T25_SUP_BROWNFIELD_MQ", "T25_SUP_TETTI_IND_MQ", "T25_SUP_TETTI_CIV_MQ",
+           "T25_SUP_INCOLTE_MQ", "T25_SUP_SAU_MQ", "T25_SUP_SERVITU_MQ",
+           "T25_DISTANZA_CABINA_PRIMARIA_KM", "T25_CAPACITA_RESIDUA_MW",
+           "T25_ENTRO_5KM_DORSALE", "T25_SUP_PUBBLICA_MQ", "T25_PROGRAMMABILI_MW",
+           "T26_MODALITA", "T26_PV_TERRA_MW", "T26_PV_TETTI_MW", "T26_PV_CAPANNONI_MW",
+           "T26_EOLICO_MW", "T26_TAGLIA_FER_INSTALLATA_MW",
+           "T26_TAGLIA_ELETTROLIZZATORE_MW", "T26_CAPACITA_BESS_MWH",
+           "T26_PRODUZIONE_H2_TON_ANNO", "T26_QUOTA_RFNBO_PERC", "T26_CURTAILMENT_PERC",
+           "T26_COPERTURA_PERC", "T26_CAPEX_CONNESSIONI_EURO", "T26_CAPEX_TOTALE_MLN",
+           "T26_LCOH_EURO_KG", "T26_PAYBACK_ANNI", "T26B_SUP_TERRA_HA"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
@@ -391,6 +386,27 @@ ETICHETTE = {
     "T12_FLAG_NAHV": "Adesione alla North Adriatic Hydrogen Valley",
     "T12_FLAG_JOINT_PROCUREMENT": "Disponibilità ad appalti congiunti",
 }
+
+
+# =============================================================================
+# PARAMETRI DEL PERCORSO B
+# Soglie di giudizio sulla produzione. Sono valori di riferimento dichiarati:
+# cambiarli qui cambia i commenti in tutti i documenti.
+# =============================================================================
+
+# Costo livellato dell'idrogeno. Il riferimento non è il costo dell'idrogeno
+# grigio da metano (2-3 Euro/kg) ma il prezzo che un utilizzatore accetta di
+# pagare per un prodotto conforme RFNBO, oggi fra 6 e 9 Euro/kg in Europa.
+LCOH_COMPETITIVO = 6.0        # sotto questa soglia il progetto regge senza aiuti
+LCOH_CRITICO = 9.0            # sopra, serve un contributo strutturale
+
+PAYBACK_ACCETTABILE_ANNI = 12.0   # orizzonte compatibile con la finanza pubblica
+CURTAILMENT_ACCETTABILE_PERC = 10.0   # energia rinnovabile non utilizzabile
+QUOTA_RFNBO_MINIMA_PERC = 90.0        # sotto, l'accesso agli incentivi è a rischio
+
+# Quota delle aree idonee oltre la quale il consumo di suolo diventa un tema
+# politico prima che tecnico.
+QUOTA_SUOLO_ATTENZIONE_PERC = 30.0
 
 # =============================================================================
 # UTILITY
@@ -1434,6 +1450,360 @@ def sezione_termico(riga) -> str:
     return "\n".join(out).strip()
 
 
+
+TESTO_AREE_PREDEFINITO = """### Aree e potenziale rinnovabile (Tool 2.5)
+
+Produrre idrogeno significa prima di tutto produrre elettricità rinnovabile, e
+questo richiede superficie. È il vincolo che decide la scala di qualunque progetto,
+prima ancora del capitale disponibile: un elettrolizzatore si compra, un ettaro di
+terreno idoneo no.
+
+La ricognizione che segue distingue le superfici per tipologia, perché differiscono
+per resa, costo di connessione e soprattutto per accettabilità sociale. Una
+copertura industriale non toglie suolo a nessuno; un impianto a terra su superficie
+agricola apre una discussione che va affrontata prima della progettazione, non dopo.
+"""
+
+
+def sezione_aree(riga) -> str:
+    """Sezione 2.5: superfici, rete elettrica e attrito territoriale."""
+    aree = {
+        "Aree dismesse (brownfield)": "T25_SUP_BROWNFIELD_MQ",
+        "Coperture industriali": "T25_SUP_TETTI_IND_MQ",
+        "Coperture civili": "T25_SUP_TETTI_CIV_MQ",
+        "Superfici incolte": "T25_SUP_INCOLTE_MQ",
+        "Superficie agricola utilizzata": "T25_SUP_SAU_MQ",
+        "Aree gravate da servitù": "T25_SUP_SERVITU_MQ",
+    }
+    disponibili = {n: (numero(riga.get(col)) or 0) for n, col in aree.items()}
+    totale_mq = sum(disponibili.values())
+    pubblica_mq = numero(riga.get("T25_SUP_PUBBLICA_MQ")) or 0
+    fer = numero(riga.get("T25_FER_INSTALLATA_MW"))
+    programmabili = numero(riga.get("T25_PROGRAMMABILI_MW"))
+    cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
+    distanza = numero(riga.get("T25_DISTANZA_CABINA_PRIMARIA_KM"))
+    sau_occupata = numero(riga.get("T25_SAU_OCCUPATA_PERC"))
+    istanze = numero(riga.get("T25_PIPELINE_ISTANZE"))
+    autorizzati = numero(riga.get("T25_PROGETTI_AUTORIZZATI"))
+
+    if totale_mq == 0 and fer is None and cap_rete is None:
+        return ""
+
+    out = [testo_da_template("B25-aree_intro_it.md", {}, TESTO_AREE_PREDEFINITO), ""]
+
+    # --- superfici
+    if totale_mq > 0:
+        out.append("#### Superfici disponibili")
+        out += ["| Tipologia | Superficie | Quota |", "| --- | --- | --- |"]
+        for nome, mq in sorted(disponibili.items(), key=lambda x: -x[1]):
+            if mq <= 0:
+                continue
+            out.append(f"| {nome} | {formatta_numero(mq / 10000)} ha | "
+                       f"{formatta_numero(mq / totale_mq * 100)}% |")
+        out.append(f"| **Totale** | **{formatta_numero(totale_mq / 10000)} ha** | |")
+        out.append("")
+
+        # la leva vera: cosa il Comune controlla davvero
+        if pubblica_mq > 0:
+            quota_pub = pubblica_mq / totale_mq * 100
+            out.append(f"Di queste superfici, **{formatta_numero(pubblica_mq / 10000)} "
+                       f"ettari sono di proprietà pubblica**, pari al "
+                       f"{formatta_numero(quota_pub)}% del totale.")
+            if quota_pub >= 50:
+                out.append("È la condizione più favorevole che un Comune possa avere: la "
+                           "disponibilità delle aree non dipende da trattative con "
+                           "privati, e l'amministrazione può mettere a bando un diritto "
+                           "di superficie senza attendere nessuno. È anche la leva che "
+                           "rende un progetto attrattivo per un investitore, perché "
+                           "elimina il rischio più difficile da quantificare.")
+            elif quota_pub >= 15:
+                out.append("La quota pubblica consente di avviare un primo lotto in "
+                           "autonomia, dimostrando la fattibilità prima di coinvolgere i "
+                           "proprietari privati. È una sequenza che riduce il rischio "
+                           "negoziale: si tratta da una posizione di progetto avviato, "
+                           "non di ipotesi.")
+            else:
+                out.append("La quota pubblica è marginale: la realizzazione dipende quasi "
+                           "interamente dalla disponibilità dei proprietari privati. È il "
+                           "vincolo da affrontare per primo, perché nessun altro passaggio "
+                           "ha senso finché le aree non sono nella disponibilità del "
+                           "progetto.")
+            out.append("")
+
+    # --- rete elettrica
+    if cap_rete is not None or distanza is not None:
+        out.append("#### Connessione alla rete")
+        righe = []
+        if fer is not None:
+            righe.append(f"| Rinnovabili già installate | {formatta_numero(fer)} MW |")
+        if programmabili:
+            righe.append(f"| di cui fonti programmabili | {formatta_numero(programmabili)} MW |")
+        if cap_rete is not None:
+            righe.append(f"| Capacità residua di rete | {formatta_numero(cap_rete)} MW |")
+        if distanza is not None:
+            righe.append(f"| Distanza dalla cabina primaria | {formatta_numero(distanza)} km |")
+        if not is_vuoto(riga.get("T25_ENTRO_5KM_DORSALE")):
+            righe.append(f"| Entro 5 km dalla dorsale | {formatta(riga['T25_ENTRO_5KM_DORSALE'], 'T25_ENTRO_5KM_DORSALE')} |")
+        out += ["| Parametro | Valore |", "| --- | --- |"] + righe + [""]
+
+        if distanza is not None:
+            if distanza <= 3:
+                out.append(f"Con {formatta_numero(distanza)} km dalla cabina primaria la "
+                           "linea diretta è quasi sempre la scelta migliore: si paga il "
+                           "cavidotto una volta e si evita il pedaggio di trasporto per "
+                           "vent'anni.")
+            elif distanza >= 10:
+                out.append(f"I {formatta_numero(distanza)} km che separano il sito dalla "
+                           "cabina primaria rendono improbabile la convenienza di una "
+                           "linea diretta: il costo del cavidotto supererebbe quello del "
+                           "pedaggio. Conviene ipotizzare la connessione alla rete "
+                           "pubblica e verificarne il costo nel Tool 2.6.")
+            else:
+                out.append(f"La distanza di {formatta_numero(distanza)} km colloca il "
+                           "progetto nella fascia in cui linea diretta e rete pubblica si "
+                           "equivalgono: la scelta dipende dalla potenza installata, e va "
+                           "confrontata caso per caso nel Tool 2.6.")
+            out.append("")
+
+        if programmabili:
+            out.append(f"La presenza di {formatta_numero(programmabili)} MW di fonti "
+                       "programmabili — idroelettrico, biomasse, recupero energetico — è "
+                       "una risorsa che il fotovoltaico da solo non offre: producono anche "
+                       "di notte e in inverno, quindi alzano le ore di funzionamento "
+                       "dell'elettrolizzatore e abbassano il costo dell'idrogeno. Vanno "
+                       "considerate nella simulazione del percorso B, caricandone il "
+                       "profilo orario reale.")
+            out.append("")
+
+    # --- attrito territoriale
+    attriti = []
+    if vero(riga.get("T25_FLAG_CONTESTAZIONI")):
+        attriti.append("Sul territorio si sono già registrate **contestazioni** su impianti "
+                       "rinnovabili. È l'informazione più importante di questa sezione: un "
+                       "progetto che non affronta il tema del consenso prima della "
+                       "progettazione rischia di fermarsi in fase autorizzativa, quando i "
+                       "costi sostenuti sono già rilevanti e le posizioni irrigidite.")
+    if sau_occupata is not None and sau_occupata > 10:
+        attriti.append(f"Il {formatta_numero(sau_occupata)}% della superficie agricola "
+                       "comunale è già occupato da impianti. È una quota che rende il "
+                       "fotovoltaico a terra difficile da difendere politicamente: "
+                       "conviene concentrarsi su coperture e aree dismesse, che non "
+                       "sottraggono suolo produttivo.")
+    if istanze:
+        attriti.append(f"Risultano {formatta_numero(istanze)} istanze in istruttoria"
+                       + (f" e {formatta_numero(autorizzati)} progetti già autorizzati"
+                          if autorizzati else "") +
+                       ". Vanno verificate prima di ipotizzare nuove installazioni: "
+                       "potrebbero occupare la capacità di rete residua, che è la risorsa "
+                       "più contesa e meno visibile del territorio.")
+    if attriti:
+        out.append("#### Vincoli di contesto")
+        out += [f"- {a}" for a in attriti] + [""]
+
+    return "\n".join(out).strip()
+
+
+
+TESTO_PRODUZIONE_PREDEFINITO = """### Dimensionamento della produzione (Tool 2.6)
+
+La simulazione ricostruisce ora per ora un anno intero di esercizio: ottomilasettecentosessanta
+valori di produzione rinnovabile, di assorbimento dell'elettrolizzatore, di carica e
+scarica dell'accumulo. Non è un dettaglio metodologico, è la sola scala a cui il
+problema esiste davvero, perché l'idrogeno si produce quando c'è sole o vento, e non
+quando serve.
+
+Da quella simulazione discendono le tre grandezze che decidono la sostenibilità del
+progetto: quanto idrogeno esce, quanto costa, e quanta parte è certificabile come
+rinnovabile ai sensi della normativa europea.
+"""
+
+
+def sezione_produzione(riga) -> str:
+    """Sezione 2.6: esito della simulazione di produzione."""
+    prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
+    taglia_ely = numero(riga.get("T26_TAGLIA_ELETTROLIZZATORE_MW"))
+    taglia_fer = numero(riga.get("T26_TAGLIA_FER_INSTALLATA_MW"))
+    bess = numero(riga.get("T26_CAPACITA_BESS_MWH"))
+    rfnbo = numero(riga.get("T26_QUOTA_RFNBO_PERC"))
+    curtail = numero(riga.get("T26_CURTAILMENT_PERC"))
+    copertura = numero(riga.get("T26_COPERTURA_PERC"))
+    lcoh = numero(riga.get("T26_LCOH_EURO_KG"))
+    capex = numero(riga.get("T26_CAPEX_TOTALE_MLN"))
+    payback = numero(riga.get("T26_PAYBACK_ANNI"))
+    modalita = riga.get("T26_MODALITA")
+    cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
+
+    if prod is None and taglia_ely is None:
+        return ""
+
+    out = [testo_da_template("B26-produzione_intro_it.md", {},
+                             TESTO_PRODUZIONE_PREDEFINITO), ""]
+
+    if not is_vuoto(modalita):
+        out.append(f"La simulazione è stata condotta in modalità *{str(modalita).strip()}*.")
+        out.append("")
+
+    # --- configurazione
+    righe = []
+    for etichetta, valore_, unita in (
+            ("Fotovoltaico a terra", numero(riga.get("T26_PV_TERRA_MW")), "MW"),
+            ("Fotovoltaico su coperture", numero(riga.get("T26_PV_TETTI_MW")), "MW"),
+            ("Fotovoltaico su capannoni", numero(riga.get("T26_PV_CAPANNONI_MW")), "MW"),
+            ("Eolico", numero(riga.get("T26_EOLICO_MW")), "MW"),
+            ("Potenza rinnovabile complessiva", taglia_fer, "MW"),
+            ("Elettrolizzatore", taglia_ely, "MW"),
+            ("Accumulo elettrochimico", bess, "MWh")):
+        if valore_:
+            righe.append(f"| {etichetta} | {formatta_numero(valore_)} {unita} |")
+    if righe:
+        out.append("#### Configurazione dell'impianto")
+        out += ["| Componente | Taglia |", "| --- | --- |"] + righe + [""]
+
+    if taglia_ely and taglia_fer:
+        rapporto = taglia_ely / taglia_fer * 100
+        out.append(f"L'elettrolizzatore è dimensionato al {formatta_numero(rapporto)}% "
+                   "della potenza rinnovabile installata. È il parametro che governa il "
+                   "compromesso centrale dell'impianto: una macchina piccola lavora molte "
+                   "ore ma lascia perdere i picchi di produzione, una grande li cattura "
+                   "tutti ma resta ferma per gran parte dell'anno, e il capitale immobilizzato "
+                   "pesa sul costo di ogni chilogrammo prodotto.")
+        out.append("")
+
+    # --- esito produttivo
+    if prod:
+        kg_giorno = prod * 1000 / 365
+        out.append("#### Esito della simulazione")
+        righe = [f"| Produzione di idrogeno | {formatta_numero(prod)} t/anno |",
+                 f"| Erogazione media | {formatta_numero(kg_giorno)} kg/giorno |"]
+        if rfnbo is not None:
+            righe.append(f"| Quota conforme RFNBO | {formatta_numero(rfnbo)}% |")
+        if curtail is not None:
+            righe.append(f"| Energia rinnovabile non utilizzata | {formatta_numero(curtail)}% |")
+        if copertura is not None:
+            righe.append(f"| Copertura del fabbisogno | {formatta_numero(copertura)}% |")
+        out += ["| Grandezza | Valore |", "| --- | --- |"] + righe + [""]
+
+    # --- conformità RFNBO
+    if rfnbo is not None:
+        out.append("#### Conformità ai criteri RFNBO")
+        if rfnbo >= 99.5:
+            out.append("L'intera produzione risulta conforme ai criteri dell'Atto Delegato "
+                       "(UE) 2023/1184. È la condizione che apre l'accesso ai regimi di "
+                       "sostegno dedicati e che consente alle imprese utilizzatrici di "
+                       "computare l'idrogeno nelle quote obbligatorie della direttiva "
+                       "RED III: senza certificazione, per un'impresa Hard-to-Abate quel "
+                       "chilogrammo non vale nulla ai fini normativi.")
+        elif rfnbo >= QUOTA_RFNBO_MINIMA_PERC:
+            out.append(f"Il {formatta_numero(rfnbo)}% della produzione è conforme ai criteri "
+                       "RFNBO. La quota restante, prodotta con energia non certificabile, "
+                       "va venduta come idrogeno ordinario a un prezzo sensibilmente "
+                       "inferiore: è un ricavo che il piano economico deve considerare "
+                       "separatamente, non mediare con il resto.")
+        else:
+            emissioni = emissioni_h2(rfnbo)
+            out.append(f"Solo il {formatta_numero(rfnbo)}% della produzione è conforme ai "
+                       "criteri RFNBO. **È una quota che mette a rischio l'intero impianto "
+                       "del progetto**: gran parte dell'idrogeno non sarebbe computabile "
+                       "nelle quote RED III né ammissibile agli incentivi dedicati, e sul "
+                       "piano ambientale l'insieme della produzione arriva a "
+                       f"{formatta_numero(emissioni)} kg di CO2 per kg di idrogeno. Prima "
+                       "di procedere occorre rivedere la configurazione: aumentare la "
+                       "potenza rinnovabile dedicata, l'accumulo, oppure ridurre la taglia "
+                       "dell'elettrolizzatore.")
+        out.append("")
+
+    # --- curtailment
+    if curtail is not None and curtail > CURTAILMENT_ACCETTABILE_PERC:
+        out.append(f"Il {formatta_numero(curtail)}% dell'energia rinnovabile prodotta non "
+                   "viene utilizzato, perché eccede la capacità di assorbimento "
+                   "dell'elettrolizzatore nei momenti di massima generazione. È energia "
+                   "pagata e non trasformata: vale la pena verificare se un accumulo "
+                   "maggiore, o una taglia superiore dell'elettrolizzatore, la recuperino "
+                   "a un costo inferiore a quello che la loro installazione comporta.")
+        out.append("")
+
+    # --- economia
+    if lcoh is not None or capex is not None:
+        out.append("#### Sostenibilità economica")
+        righe = []
+        if capex:
+            righe.append(f"| Investimento complessivo | {formatta_numero(capex)} milioni di Euro |")
+        connessioni = numero(riga.get("T26_CAPEX_CONNESSIONI_EURO"))
+        if connessioni:
+            righe.append(f"| di cui connessioni elettriche | Euro {formatta_numero(connessioni)} |")
+        if lcoh is not None:
+            righe.append(f"| Costo livellato dell'idrogeno | Euro {formatta_numero(lcoh)}/kg |")
+        if payback is not None:
+            righe.append(f"| Tempo di ritorno | {formatta_numero(payback)} anni |")
+        out += ["| Voce | Valore |", "| --- | --- |"] + righe + [""]
+
+        if lcoh is not None:
+            if lcoh <= LCOH_COMPETITIVO:
+                out.append(f"Un costo di produzione di Euro {formatta_numero(lcoh)} al "
+                           "chilogrammo colloca il progetto nella fascia competitiva del "
+                           "mercato europeo dell'idrogeno rinnovabile. La sostenibilità "
+                           "non dipende quindi da un contributo permanente, ma dalla "
+                           "capacità di contrattualizzare i volumi: senza acquirenti "
+                           "impegnati, un buon costo di produzione non basta.")
+            elif lcoh <= LCOH_CRITICO:
+                out.append(f"Il costo di Euro {formatta_numero(lcoh)} al chilogrammo si "
+                           "colloca nella fascia intermedia. Il progetto regge se assistito "
+                           "da un contributo in conto capitale che riduca il peso "
+                           "dell'ammortamento, oppure se l'idrogeno viene venduto a "
+                           "utilizzatori che ne hanno un obbligo normativo e per i quali "
+                           "l'alternativa è una sanzione, non un combustibile più economico.")
+            else:
+                out.append(f"Il costo di Euro {formatta_numero(lcoh)} al chilogrammo è "
+                           "**fuori mercato** rispetto ai riferimenti europei attuali. La "
+                           "configurazione va rivista prima di procedere: nella maggior "
+                           "parte dei casi la causa è un elettrolizzatore che lavora poche "
+                           "ore l'anno, quindi la strada è aumentare la potenza rinnovabile "
+                           "dedicata o ridurre la taglia della macchina.")
+            out.append("")
+
+        if payback is not None and payback > PAYBACK_ACCETTABILE_ANNI:
+            out.append(f"Il tempo di ritorno di {formatta_numero(payback)} anni eccede "
+                       "l'orizzonte che un'amministrazione può assumere senza un partner "
+                       "industriale. È il segnale che il progetto va costruito come "
+                       "partenariato pubblico-privato, con il Comune che conferisce aree e "
+                       "autorizzazioni e un operatore che porta capitale e gestione.")
+            out.append("")
+
+    # --- verifiche incrociate con il territorio
+    verifiche = []
+    if cap_rete and taglia_ely and taglia_ely > cap_rete:
+        verifiche.append(f"L'elettrolizzatore ({formatta_numero(taglia_ely)} MW) supera la "
+                         f"capacità residua di rete dichiarata nel questionario 2.5 "
+                         f"({formatta_numero(cap_rete)} MW). È il vincolo che più spesso "
+                         "determina i tempi di un progetto: va verificato con il "
+                         "distributore prima di qualunque altra cosa.")
+
+    sup_terra = numero(riga.get("T26B_SUP_TERRA_HA"))
+    disponibile_mq = sum(numero(riga.get(c)) or 0 for c in
+                         ("T25_SUP_BROWNFIELD_MQ", "T25_SUP_INCOLTE_MQ",
+                          "T25_SUP_SAU_MQ", "T25_SUP_SERVITU_MQ"))
+    if sup_terra and disponibile_mq:
+        quota = sup_terra * 10000 / disponibile_mq * 100
+        if quota > 100:
+            verifiche.append(f"L'impianto richiede {formatta_numero(sup_terra)} ettari a "
+                             "terra, più di quanti ne risultino disponibili dal "
+                             "questionario 2.5. La configurazione non è realizzabile così "
+                             "com'è: va ridotta la quota a terra a favore delle coperture, "
+                             "oppure esteso il perimetro oltre i confini comunali.")
+        elif quota > QUOTA_SUOLO_ATTENZIONE_PERC:
+            verifiche.append(f"L'impianto occuperebbe il {formatta_numero(quota)}% delle "
+                             "superfici a terra disponibili. È una quota che rende il "
+                             "consumo di suolo un tema di discussione pubblica: conviene "
+                             "affrontarlo nel percorso partecipativo prima che diventi "
+                             "un'opposizione in fase autorizzativa.")
+
+    if verifiche:
+        out.append("#### Verifiche di coerenza con il territorio")
+        out += [f"- {v}" for v in verifiche] + [""]
+
+    return "\n".join(out).strip()
+
+
 def testo_percorso_a(riga) -> str:
     """Lettura discorsiva del percorso A - domanda di idrogeno."""
     ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
@@ -1607,24 +1977,8 @@ def commento_percorso(riga, codice: str) -> str:
         return testo_percorso_a(riga)
 
     if codice == "B":
-        prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
-        lcoh = numero(riga.get("T26_LCOH_EURO_KG"))
-        parti = []
-        if prod:
-            parti.append(f"La configurazione simulata produrrebbe **{formatta_numero(prod)} "
-                         "t/anno** di idrogeno.")
-        if lcoh:
-            parti.append(f"Il costo livellato risultante è di Euro {formatta_numero(lcoh)}/kg.")
-        rfnbo = numero(riga.get("T26_QUOTA_RFNBO_PERC"))
-        if rfnbo is not None:
-            if rfnbo >= 90:
-                parti.append("La quota conforme ai criteri RFNBO è elevata: l'idrogeno "
-                             "prodotto può accedere ai regimi di sostegno dedicati.")
-            else:
-                parti.append(f"La quota conforme ai criteri RFNBO si ferma al "
-                             f"{formatta_numero(rfnbo)}%: va verificata l'ammissibilità "
-                             "agli incentivi che richiedono la certificazione.")
-        return " ".join(parti)
+        parti = [sezione_aree(riga), sezione_produzione(riga)]
+        return "\n\n".join(p for p in parti if p)
 
     if codice == "C":
         tgm = numero(riga.get("T27_TGM_CAMION"))
