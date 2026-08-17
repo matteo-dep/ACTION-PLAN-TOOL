@@ -51,7 +51,9 @@ def blocchi_markdown(md: str):
                 yield ("tabella", tabella)
             continue
 
-        if re.fullmatch(r"-{3,}|_{3,}|\*{3,}", stripped):
+        if stripped == "<<<PAGINA>>>":
+            yield ("pagina", None)
+        elif re.fullmatch(r"-{3,}|_{3,}|\*{3,}", stripped):
             yield ("riga", None)
         elif stripped.startswith("####"):
             yield ("h4", stripped.lstrip("#").strip())
@@ -247,9 +249,7 @@ def _pdf_tabella(pdf, dati):
     pdf.set_fill_color(255, 255, 255)
     pdf.set_text_color(0, 0, 0)
     with pdf.table(col_widths=tuple(pesi),
-                   text_align=tuple("LEFT" if j == 0 else
-                                    ("RIGHT" if n <= 3 else "LEFT")
-                                    for j in range(n)),
+                   text_align=tuple(_allinea(dati, j, n) for j in range(n)),
                    line_height=5,
                    padding=1.6,
                    headings_style=_intestazione_tabella(pdf),
@@ -260,6 +260,16 @@ def _pdf_tabella(pdf, dati):
                 fila.cell(pdf.txt(_senza_grassetto(cella)))
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
+
+
+def _allinea(dati, j, n) -> str:
+    """Numeri e valori brevi a destra, testo discorsivo a sinistra."""
+    if j == 0:
+        return "LEFT"
+    valori = [str(r[j]) for r in dati[1:] if j < len(r)]
+    if valori and max(len(v) for v in valori) > 28:
+        return "LEFT"
+    return "RIGHT"
 
 
 def _senza_grassetto(testo) -> str:
@@ -279,6 +289,9 @@ def scrivi_markdown_pdf(pdf, md: str):
     for tipo, contenuto in blocchi_markdown(md):
         if tipo == "tabella":
             _pdf_tabella(pdf, contenuto)
+        elif tipo == "pagina":
+            if pdf.get_y() > pdf.t_margin + 30:
+                pdf.add_page()
         elif tipo == "riga":
             pdf.ln(2)
             pdf.set_draw_color(200, 205, 215)
@@ -304,13 +317,19 @@ def scrivi_markdown_pdf(pdf, md: str):
             pdf.set_text_color(0, 0, 0); pdf.ln(1)
         elif tipo == "nota":
             y0 = pdf.get_y()
+            pagina0 = pdf.page_no()
             pdf.set_fill_color(240, 243, 250); pdf.font("I", 10)
             pdf.set_x(pdf.l_margin + 4)
             pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin - 4, 6,
                            pdf.txt(contenuto), fill=True)
-            pdf.set_draw_color(*BLU); pdf.set_line_width(1)
-            pdf.line(pdf.l_margin + 1, y0, pdf.l_margin + 1, pdf.get_y())
-            pdf.set_line_width(0.2); pdf.ln(3)
+            # se la nota è andata a capo pagina, y0 appartiene alla pagina
+            # precedente: disegnarne la barra da lì traccerebbe una riga verticale
+            # lunga quanto il foglio, accanto a testo che non c'entra nulla
+            if pdf.page_no() == pagina0:
+                pdf.set_draw_color(*BLU); pdf.set_line_width(1)
+                pdf.line(pdf.l_margin + 1, y0, pdf.l_margin + 1, pdf.get_y())
+                pdf.set_line_width(0.2)
+            pdf.ln(3)
         elif tipo == "elenco":
             marcatore, testo = contenuto
             pdf.font("B", 11)
@@ -505,6 +524,8 @@ def scrivi_markdown_docx(doc, md: str):
                         _ombreggia(cella, "E2E8F3")
 
             doc.add_paragraph()
+        elif tipo == "pagina":
+            doc.add_page_break()
         elif tipo == "riga":
             doc.add_paragraph("_" * 60)
         elif tipo == "h1":

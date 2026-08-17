@@ -644,7 +644,8 @@ def testo_passo2(riga) -> str:
         if not blocchi_pieni and not commento:
             continue
 
-        out.append(f"## {percorso['titolo']}")
+        # ogni percorso è un capitolo a sé: comincia su pagina nuova
+        out.append("<<<PAGINA>>>")
         if commento:
             out += [commento, ""]
         for titolo_blocco, righe in blocchi_pieni:
@@ -753,26 +754,71 @@ def ripartisci_fabbisogno(aziende: list, totale_ton):
 
 TESTO_HTA_PREDEFINITO = """### Domanda industriale Hard-to-Abate (Tool 2.1)
 
-La transizione impone una gerarchia di intervento fondata sulla termodinamica:
-dove l'elettrificazione diretta è possibile, tramite pompe di calore, resistenze o
+La transizione impone una gerarchia di intervento fondata sulla termodinamica: dove
+l'elettrificazione diretta è possibile, tramite pompe di calore, resistenze o
 induzione, essa resta sempre la strada più efficiente. Esistono però comparti
 definiti **Hard-to-Abate** nei quali l'elettrificazione incontra limiti fisici o
 chimici insuperabili: settori in cui la molecola di idrogeno partecipa direttamente
-alla reazione, come la sintesi dell'ammoniaca o la riduzione diretta del minerale
-di ferro, e processi che richiedono calore oltre gli 800 °C, come i forni fusori
-del vetro o la calcinazione del clinker.
+alla reazione, come la sintesi dell'ammoniaca o la riduzione diretta del minerale di
+ferro, e processi che richiedono calore oltre gli 800 °C, come i forni fusori del
+vetro o la calcinazione del clinker.
 
-A questo si aggiunge un vincolo normativo: la direttiva **RED III** impone che
-entro il 2030 almeno il 42% dell'idrogeno impiegato nell'industria provenga da
-fonti rinnovabili di origine non biologica (RFNBO), quota che sale al 60% entro il
-2035. Per le imprese Hard-to-Abate la decarbonizzazione non è una scelta ma un
-obbligo di legge, e il meccanismo CBAM ne rafforza l'urgenza sul piano competitivo.
+A questi limiti tecnici si somma un vincolo normativo. La direttiva **RED III**
+impone che entro il 2030 almeno il 42% dell'idrogeno impiegato nell'industria
+provenga da fonti rinnovabili di origine non biologica, quota che sale al 60% entro
+il 2035, e il meccanismo CBAM ne rafforza l'urgenza sul piano della competitività.
+"""
+
+TESTO_OFFTAKE_PREDEFINITO = """#### Perché la domanda industriale conta più di ogni altra
+
+La ragione per cui questa rilevazione apre il percorso non è il volume in sé, ma la
+sua natura. Un impianto di produzione di idrogeno ha costi quasi interamente fissi:
+una volta costruito, produrre poco o produrre molto cambia poco la spesa, mentre
+cambia moltissimo il costo di ogni singolo chilogrammo. Ne consegue che la variabile
+decisiva non è la capacità installata ma **la continuità della domanda**.
+
+Un'utenza industriale offre esattamente ciò che manca a tutte le altre: un consumo
+prevedibile, distribuito su tutto l'anno, indipendente dalla stagione e dalle
+vacanze scolastiche. È per questo che i modelli di business dell'idrogeno ruotano
+attorno al contratto di acquisto pluriennale, il cosiddetto *off-take*: senza un
+volume impegnato per almeno dieci anni nessun istituto finanzia un elettrolizzatore,
+e la Strategia Nazionale individua proprio nella creazione di una domanda vincolata
+la prima delle azioni necessarie a far partire la filiera.
+
+Per l'amministrazione questo si traduce in un compito preciso e diverso da quello
+che ci si aspetterebbe: non costruire un impianto, ma **mettere attorno a un tavolo
+gli utilizzatori prima che l'impianto esista**, e far sì che l'impegno reciproco
+preceda l'investimento.
+
+#### Il costo che non compete al Comune
+
+Va detto con chiarezza, perché è la causa più frequente di aspettative mal riposte.
+Convertire un processo industriale all'idrogeno non significa cambiare fornitore di
+combustibile: significa sostituire bruciatori, tubazioni, valvole, sistemi di
+regolazione e talvolta l'intero forno, con investimenti che nei comparti energivori
+si misurano in milioni di euro e con fermi impianto che valgono quanto i lavori.
+
+**Questo costo è dell'impresa, non del Comune**, e nessuna amministrazione può né
+deve accollarselo. Ma va conosciuto, per tre ragioni. La prima è che determina i
+tempi reali: un'azienda cambia il forno quando il forno arriva a fine vita, non
+quando arriva l'idrogeno, e le finestre di sostituzione si aprono ogni dieci o
+quindici anni. La seconda è che spiega perché un'impresa possa dichiararsi
+interessata e poi non firmare: l'interesse è sul vettore, l'ostacolo è sulla
+macchina. La terza è che indica dove il sostegno pubblico serve davvero — non tanto
+sul capitale dell'elettrolizzatore quanto sulla conversione degli impianti
+utilizzatori e sul differenziale di costo del combustibile, che sono le due voci su
+cui la Strategia Nazionale chiede misure dedicate.
+
+Il compito del Comune resta quindi quello di conoscere il ciclo di vita degli
+impianti delle aziende del proprio territorio, e di far coincidere la disponibilità
+di idrogeno con le finestre in cui quegli impianti vanno comunque rinnovati.
 """
 
 TESTO_REALITY_CHECK_PREDEFINITO = """#### Che cosa significa produrre questa quantità
 
-Tradurre le tonnellate di idrogeno in energia e suolo serve a fissare l'ordine di
-grandezza dell'impegno richiesto al territorio.
+Tradurre le tonnellate di idrogeno in energia elettrica e in suolo serve a fissare
+l'ordine di grandezza dell'impegno richiesto al territorio, prima ancora di
+discutere di tecnologie e di costi.
 
 | Grandezza | Valore |
 | --- | --- |
@@ -781,8 +827,8 @@ grandezza dell'impegno richiesto al territorio.
 | Potenza fotovoltaica equivalente | {mwp} MWp |
 | Superficie a terra occupata | {ettari} ettari, pari a circa {campi} campi da calcio |
 
-> Calcolo condotto con un consumo specifico di elettrolisi di {kwh_kg} kWh per kg
-> di idrogeno, una producibilità fotovoltaica di {resa} kWh per kWp installato e
+> Calcolo condotto con un consumo specifico di elettrolisi di {kwh_kg} kWh per kg di
+> idrogeno, una producibilità fotovoltaica di {resa} kWh per kWp installato e
 > un'occupazione di {ha_mwp} ettari per MWp a terra.
 
 {giudizio_suolo}
@@ -854,6 +900,10 @@ def sezione_hta(riga) -> str:
             out.append("Criteri di valutazione applicati:")
             out += [f"- **{v}** - {AT.VERDETTI[v].replace('**', '')}" for v in presenti]
             out.append("")
+
+    # --- perché la domanda industriale è quella che conta
+    out.append(testo_da_template("A21-offtake_it.md", {}, TESTO_OFFTAKE_PREDEFINITO))
+    out.append("")
 
     # --- reality check su energia e suolo
     if ind:
@@ -1034,11 +1084,34 @@ def sezione_flotte(riga) -> str:
         if rapporto:
             out.append(f"| Rapporto fra le due | {formatta_numero(rapporto)} volte |")
         out.append("")
-        if rapporto and rapporto > 1.5:
-            out.append(f"La via dell'idrogeno richiede {formatta_numero(rapporto)} volte "
-                       "l'energia della via elettrica diretta. È il costo termodinamico "
-                       "della conversione, e va messo in conto: si accetta dove la batteria "
-                       "non è praticabile, non come scelta di preferenza.")
+        if rapporto and rapporto > 1.2:
+            extra_mwh = elettrolisi - elettrico
+            mwp_extra = extra_mwh * 1000 / RESA_PV_KWH_KWP / 1000
+            out.append(f"La via dell'idrogeno richiede **{formatta_numero(rapporto)} volte "
+                       "l'energia** della via elettrica diretta. Il divario nasce da tre "
+                       "perdite in sequenza, nessuna delle quali dipende dalla qualità "
+                       "delle macchine: l'elettrolisi restituisce in idrogeno circa i due "
+                       "terzi dell'elettricità che assorbe, la compressione a 350 o 700 bar "
+                       "ne consuma un'altra frazione, e la cella a combustibile a bordo del "
+                       "mezzo riconverte in movimento poco più della metà dell'energia "
+                       "chimica che riceve. Ogni passaggio è vincolato dalla termodinamica, "
+                       "non dallo stato dell'arte.")
+            out.append("")
+            out.append(f"Tradotto in termini concreti per il territorio: coprire questa "
+                       f"flotta con idrogeno richiede {formatta_numero(extra_mwh)} MWh "
+                       "all'anno **in più** rispetto alla stessa flotta elettrificata, "
+                       f"l'equivalente della produzione di circa {formatta_numero(mwp_extra)} "
+                       "MWp di fotovoltaico aggiuntivo, con il suolo e gli investimenti che "
+                       "questo comporta. È una quantità che va confrontata con le superfici "
+                       "rilevate nel percorso B, perché è lì che quel divario si traduce in "
+                       "ettari.")
+            out.append("")
+            out.append("Nulla di tutto ciò rende l'idrogeno una scelta sbagliata: significa "
+                       "che è una scelta **costosa in energia**, e che come tale va riservata "
+                       "ai casi in cui l'alternativa non esiste. Destinarlo a mezzi che la "
+                       "batteria servirebbe altrettanto bene sottrae energia rinnovabile ai "
+                       "segmenti che non hanno altra strada, e nel bilancio complessivo del "
+                       "territorio è un peggioramento, non un progresso.")
             out.append("")
 
     # --- costo totale di possesso
@@ -1088,36 +1161,68 @@ fase di un percorso comunale, anche quando il grosso della domanda sta altrove.
 DETTAGLIO_NICCHIE = {
     "T23_FLAG_RIFUGI": {
         "titolo": "Rifugi e utenze isolate",
-        "testo": "Sono utenze fuori rete, oggi alimentate da generatori diesel il cui "
-                 "combustibile va portato in quota. Una cella a combustibile alimentata "
-                 "da idrogeno prodotto a valle elimina il rumore, le emissioni locali e "
-                 "il rischio di sversamento, ma la logistica di rifornimento resta il "
-                 "vincolo principale: va confrontata con quella attuale del gasolio "
-                 "prima di considerarla un vantaggio.",
+        "testo": "Sono utenze fuori rete, alimentate da generatori diesel il cui "
+                 "combustibile arriva in quota con elicottero o con mezzi cingolati, a un "
+                 "costo di trasporto che spesso supera quello del carburante stesso. Una "
+                 "cella a combustibile elimina il rumore — che in un rifugio d'alta quota "
+                 "non è un dettaglio ma la ragione per cui il generatore viene spento la "
+                 "notte — azzera le emissioni locali e toglie il rischio di sversamento in "
+                 "aree di pregio ambientale, dove una perdita comporta bonifiche costose e "
+                 "danni reputazionali.\n\n"
+                 "Il vincolo si sposta però tutto sulla logistica: le bombole a 200 bar "
+                 "hanno una densità energetica per volume molto inferiore al gasolio, "
+                 "quindi a parità di autonomia servono più viaggi. Prima di considerare la "
+                 "conversione un vantaggio va confrontato il numero di rotazioni annue "
+                 "necessarie con quelle attuali, e valutata l'alternativa di un impianto "
+                 "fotovoltaico con accumulo, che in molti rifugi copre già gran parte del "
+                 "fabbisogno estivo, quando la frequentazione è massima.",
         "driver": "T23_RIFUGI_ELETTRICO_KWH",
         "unita": "kWh/anno",
         "kg": lambda v: v / RESA_FUEL_CELL_KWH_KG,
     },
     "T23_FLAG_MEZZI_CRITICI": {
         "titolo": "Mezzi critici e comprensori",
-        "testo": "Battipista, mezzi di soccorso e di protezione civile hanno un requisito "
-                 "che il costo non esprime: devono funzionare quando serve, spesso a "
-                 "temperature rigide e senza possibilità di soste lunghe. È la condizione "
-                 "in cui la batteria perde capacità proprio quando è più necessaria, e in "
-                 "cui il rifornimento rapido dell'idrogeno diventa un requisito operativo "
-                 "prima che una scelta ambientale.",
+        "testo": "Battipista, mezzi di soccorso e di protezione civile hanno un "
+                 "requisito che il costo non esprime: devono funzionare quando serve, e "
+                 "quando serve è quasi sempre la condizione peggiore. Le batterie perdono "
+                 "capacità proprio sotto zero, e un mezzo che deve garantire otto ore di "
+                 "lavoro continuo a meno dieci gradi non può permettersi una riserva "
+                 "incerta.\n\n"
+                 "A questo si aggiunge il ciclo di lavoro. Un battipista non percorre "
+                 "chilometri, eroga coppia in salita su neve per l'intero turno, con "
+                 "consumi che si misurano in litri all'ora e non in litri per cento "
+                 "chilometri. I mezzi di soccorso alternano lunghi stazionamenti a motore "
+                 "acceso — per alimentare apparecchiature e riscaldamento — a picchi di "
+                 "potenza improvvisi. In entrambi i casi il rifornimento in pochi minuti "
+                 "vale più dell'efficienza, perché il mezzo deve tornare operativo, non "
+                 "restare in ricarica.\n\n"
+                 "Sono impieghi a volume contenuto ma ad altissima visibilità: un mezzo "
+                 "comunale a idrogeno che opera durante un'emergenza fa per la percezione "
+                 "pubblica della tecnologia più di qualunque campagna informativa.",
         "driver": "T23_GASOLIO_FLOTTA_LITRI_ANNO",
         "unita": "litri di gasolio/anno",
         "kg": lambda v: v / LITRI_DIESEL_PER_KG_H2_GRAVOSO,
     },
     "T23_FLAG_COLD_STORAGE": {
         "titolo": "Logistica del freddo e movimentazione",
-        "testo": "Nei magazzini a ciclo continuo i carrelli elevatori elettrici impongono "
-                 "la sostituzione delle batterie fra un turno e l'altro, con spazi "
-                 "dedicati alla ricarica e tempi morti. La cella a combustibile si "
-                 "rifornisce in pochi minuti e mantiene prestazioni costanti anche in "
-                 "cella frigorifera, dove le batterie perdono capacità. È l'applicazione "
-                 "in cui l'idrogeno ha la storia commerciale più lunga.",
+        "testo": "Nei magazzini a ciclo continuo i carrelli elevatori elettrici "
+                 "impongono la sostituzione delle batterie fra un turno e l'altro: servono "
+                 "batterie di scorta, un locale dedicato alla ricarica con la ventilazione "
+                 "prescritta, e il tempo che l'operatore impiega nel cambio. La cella a "
+                 "combustibile si rifornisce in tre minuti alla stessa colonnina, senza "
+                 "batterie di riserva e senza locale tecnico: lo spazio recuperato è "
+                 "superficie di magazzino che torna a produrre reddito.\n\n"
+                 "Nella logistica del freddo il vantaggio si amplifica. Le batterie al "
+                 "piombo perdono fino a un terzo della capacità in cella frigorifera, "
+                 "mentre la cella a combustibile mantiene tensione costante fino a "
+                 "esaurimento e produce calore che giova alla cabina dell'operatore. È il "
+                 "motivo per cui questa è l'applicazione con la storia commerciale più "
+                 "lunga: decine di migliaia di carrelli a idrogeno operano da anni nei "
+                 "centri di distribuzione, in configurazioni che non hanno più nulla di "
+                 "sperimentale.\n\n"
+                 "Il caso d'uso è però quasi sempre privato: il ruolo dell'amministrazione "
+                 "è mettere in contatto l'operatore logistico con il progetto di "
+                 "produzione, non realizzare l'impianto.",
         "driver": "T23_N_CARRELLI",
         "unita": "carrelli",
         "kg": lambda v: v * CONSUMO_CARRELLO_KG_ORA * ORE_CARRELLO_GIORNO
@@ -1125,39 +1230,82 @@ DETTAGLIO_NICCHIE = {
     },
     "T23_FLAG_TRENI": {
         "titolo": "Trasporto ferroviario su tratte non elettrificate",
-        "testo": "Elettrificare una linea costa fra uno e due milioni di euro al "
-                 "chilometro e richiede anni di cantiere. Dove i volumi di traffico non "
+        "testo": "Elettrificare una linea ferroviaria costa fra uno e due milioni di euro "
+                 "al chilometro e richiede anni di cantiere, con interruzioni del servizio "
+                 "e opere civili su ponti e gallerie. Dove i volumi di traffico non "
                  "giustificano quell'investimento, l'automotrice a idrogeno consente di "
-                 "eliminare il gasolio senza toccare l'infrastruttura, con un unico punto "
-                 "di rifornimento in deposito. Il confronto va fatto sul costo "
-                 "complessivo di ciclo di vita, non sul solo prezzo del mezzo.",
+                 "eliminare il gasolio senza toccare l'infrastruttura: un unico punto di "
+                 "rifornimento in deposito sostituisce centinaia di chilometri di linea "
+                 "aerea.\n\n"
+                 "È anche la nicchia con i volumi più alti fra quelle qui considerate. Un "
+                 "servizio regionale su una tratta di media lunghezza consuma quantità di "
+                 "idrogeno paragonabili a quelle di un'intera flotta di autobus urbani, e "
+                 "lo fa con una domanda concentrata in un solo punto e prevedibile "
+                 "sull'intero orario di servizio. Per un progetto di produzione locale è la "
+                 "condizione migliore possibile: un cliente unico, contrattualizzabile, che "
+                 "ritira ogni giorno la stessa quantità.\n\n"
+                 "Il confronto va comunque condotto sul costo di ciclo di vita completo, "
+                 "considerando che il materiale rotabile a idrogeno costa oggi "
+                 "sensibilmente più di quello diesel e che la decisione compete al gestore "
+                 "del servizio, non al Comune. Il ruolo dell'amministrazione è segnalare la "
+                 "disponibilità di idrogeno locale nel momento in cui la Regione programma "
+                 "il rinnovo della flotta.",
         "driver": "T23_TRATTA_NON_ELETTRIFICATA_KM",
         "unita": "km di tratta",
         "kg": None,     # serve anche il numero di corse: calcolato a parte
     },
     "T23_FLAG_PORTI_AEROPORTI": {
         "titolo": "Movimentazione portuale e aeroportuale",
-        "testo": "I mezzi di piazzale lavorano a ciclo continuo su percorsi brevi e "
-                 "ripetitivi, rientrando in aree ristrette: è la configurazione ideale "
-                 "per un rifornimento concentrato in pochi punti. La domanda è "
-                 "prevedibile e contrattualizzabile, il che rende questi impianti fra i "
-                 "più facili da finanziare.",
+        "testo": "I mezzi di piazzale lavorano a ciclo continuo su percorsi "
+                 "brevi e ripetitivi, rientrando ogni sera in aree ristrette e sorvegliate: "
+                 "è la configurazione ideale per un rifornimento concentrato in pochi punti, "
+                 "senza bisogno di una rete distributiva. La domanda è prevedibile giorno "
+                 "per giorno e appartiene a un unico soggetto, quindi è "
+                 "contrattualizzabile: sono le due condizioni che rendono un impianto "
+                 "finanziabile.\n\n"
+                 "In ambito portuale si aggiunge la prospettiva del *cold ironing* e "
+                 "dell'alimentazione delle navi all'ormeggio, che sposta il fabbisogno su "
+                 "un ordine di grandezza superiore, e la possibilità di ricevere idrogeno "
+                 "via nave o via ammoniaca. Un porto non è quindi solo un consumatore ma "
+                 "un potenziale nodo di importazione, il che cambia la natura del progetto: "
+                 "da locale a infrastrutturale.\n\n"
+                 "L'interlocutore è l'autorità portuale o il gestore aeroportuale, e i "
+                 "tempi decisionali seguono i piani regolatori di quegli enti, non quelli "
+                 "comunali.",
         "driver": None,
         "unita": "",
         "kg": None,
     },
     "T23_FLAG_DEPURATORI": {
         "titolo": "Impianti di depurazione",
-        "testo": "Il depuratore non è un consumatore di idrogeno ma un possibile sito di "
-                 "produzione, e per ragioni che nessun altro impianto comunale offre. "
-                 "L'elettrolisi genera otto chilogrammi di ossigeno puro per ogni "
-                 "chilogrammo di idrogeno: è esattamente il reagente che le vasche a "
-                 "fanghi attivi consumano, e che oggi si ottiene comprimendo aria — la "
-                 "voce di consumo elettrico più alta dell'intero impianto. A questo si "
-                 "aggiungono l'acqua di processo, disponibile in loco in quantità "
-                 "sovrabbondante, e il calore di scarto dello stack, che a 55-60 °C è "
-                 "adatto a mantenere i digestori anaerobici in regime mesofilo senza "
-                 "bruciare parte del biogas autoprodotto.",
+        "testo": "Il depuratore non è un consumatore di idrogeno ma un possibile "
+                 "sito di produzione, e per ragioni che nessun altro impianto comunale "
+                 "offre. L'elettrolisi genera otto chilogrammi di ossigeno puro per ogni "
+                 "chilogrammo di idrogeno, e l'ossigeno è esattamente il reagente che le "
+                 "vasche a fanghi attivi consumano: oggi lo si ottiene comprimendo aria, "
+                 "operazione che rappresenta la voce di consumo elettrico più alta "
+                 "dell'intero impianto, spesso oltre la metà del totale. Sostituire l'aria "
+                 "con ossigeno puro migliora inoltre la resa del processo biologico, "
+                 "perché aumenta la concentrazione disponibile ai batteri.\n\n"
+                 "La seconda sinergia è l'acqua. L'elettrolisi richiede acqua "
+                 "demineralizzata in quantità modeste — circa undici litri per chilogrammo "
+                 "di idrogeno — mentre un depuratore ne tratta ogni giorno migliaia di "
+                 "metri cubi e dispone già di prelievo, pompaggio e competenze per "
+                 "gestirli. Il prelievo dell'elettrolizzatore resta nell'ordine di un "
+                 "millesimo della portata trattata: una risorsa di fatto illimitata e "
+                 "senza costo aggiuntivo.\n\n"
+                 "La terza è il calore. Lo stack dissipa in calore circa un terzo "
+                 "dell'energia assorbita, disponibile a 55-60 °C: è la temperatura giusta "
+                 "per mantenere i digestori anaerobici in regime mesofilo, intorno ai 37 "
+                 "gradi. Recuperarlo evita di bruciare parte del biogas autoprodotto per "
+                 "riscaldare i fanghi, lasciandolo interamente disponibile per la "
+                 "trasformazione in biometano — che a sua volta può diventare idrogeno a "
+                 "basse emissioni senza passare dall'elettrolisi.\n\n"
+                 "Infine il profilo di carico. Un depuratore assorbe energia in modo "
+                 "pressoché costante tutto l'anno, senza le punte tipiche di altre utenze: "
+                 "accoppiato a un elettrolizzatore diventa un punto di flessibilità per la "
+                 "rete locale, capace di assorbire i surplus di produzione rinnovabile nei "
+                 "momenti in cui verrebbero altrimenti dispersi.",
         "driver": None,          # trattato a parte: è produzione, non consumo
         "unita": "",
         "kg": None,
@@ -1450,6 +1598,26 @@ def sezione_termico(riga) -> str:
     return "\n".join(out).strip()
 
 
+
+
+TESTO_PERCORSO_B_INTRO = """## Percorso B - L'offerta di idrogeno
+
+Il percorso B risponde alla domanda speculare rispetto al precedente: il territorio
+è in grado di produrre l'idrogeno di cui c'è bisogno, e a quali condizioni?
+
+La risposta non dipende dalla tecnologia, che è disponibile e matura, ma da tre
+risorse che il Comune possiede o non possiede: la superficie su cui installare
+generazione rinnovabile, la capacità della rete elettrica di accogliere quella
+potenza, e il consenso necessario perché entrambe si traducano in impianti
+realizzati. Nessuna delle tre si compra, e la prima è quella che determina la scala
+di tutto il resto.
+
+L'analisi procede in due passaggi. Il primo censisce ciò che il territorio ha già —
+superfici, rinnovabili installate, margini di rete — distinguendo ciò su cui
+l'amministrazione decide da sola da ciò che dipende da terzi. Il secondo simula un
+impianto su quella base, ora per ora lungo un anno intero, e ne restituisce
+produzione, costo e conformità normativa.
+"""
 
 TESTO_AREE_PREDEFINITO = """### Aree e potenziale rinnovabile (Tool 2.5)
 
@@ -1804,128 +1972,101 @@ def sezione_produzione(riga) -> str:
     return "\n".join(out).strip()
 
 
+TESTO_PERCORSO_A_INTRO = """## Percorso A - La domanda di idrogeno
+
+Il percorso A risponde a una sola domanda: sul territorio comunale esiste qualcuno
+che ha bisogno di idrogeno, e per ragioni che nessuna altra tecnologia soddisfa?
+
+È una domanda meno ovvia di quanto sembri. L'idrogeno non è un combustibile
+migliore degli altri: è un vettore costoso da produrre, difficile da stoccare e
+soggetto a perdite di efficienza a ogni passaggio. Ha senso esattamente dove le
+alternative non arrivano, e non ha senso da nessun'altra parte. Cercare la domanda
+significa quindi separare i casi in cui l'idrogeno è necessario da quelli in cui
+sarebbe solo una scelta costosa, e il criterio di separazione non è l'ambizione
+dell'amministrazione ma la termodinamica.
+
+L'analisi si articola in quattro rilevazioni, condotte con altrettanti strumenti
+del Toolkit:
+
+| Strumento | Oggetto | Domanda a cui risponde |
+| --- | --- | --- |
+| Tool 2.1 | Industria Hard-to-Abate | quali processi non possono fare a meno della molecola |
+| Tool 2.2 | Flotte e mobilità | quali mezzi la batteria non riesce a servire |
+| Tool 2.3 | Usi di nicchia | dove contano continuità e tempi più del costo |
+| Tool 2.4 | Fabbisogno termico | se il riscaldamento pubblico rientri fra gli usi sensati |
+
+Le quattro rilevazioni restituiscono volumi molto diversi fra loro, e il confronto
+finale fra le componenti dice quale sarà la vera natura del progetto comunale.
+"""
+
+
 def testo_percorso_a(riga) -> str:
-    """Lettura discorsiva del percorso A - domanda di idrogeno."""
+    """Percorso A: introduzione, quattro rilevazioni, bilancio finale."""
     ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
     flotta = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
     dom = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_H2_TON_ANNO"])
-    out = []
 
-    # --- 1. quadro d'insieme e equivalenze
-    if dom:
-        kg_giorno = dom * 1000 / GIORNI_OPERATIVI
-        bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
-        litri = dom * 1000 * LITRI_DIESEL_PER_KG_H2
-        # kg per kg equivale a t per t: il rapporto non cambia con l'unità
-        co2_unit = co2_evitata_kg_per_kg_h2(riga)
-        co2 = dom * co2_unit
-        quota_rfnbo = numero(riga.get("T26_QUOTA_RFNBO_PERC"))
-        out.append(f"La domanda potenziale complessiva individuata sul territorio comunale "
-                   f"ammonta a **{formatta_numero(dom)} tonnellate di idrogeno all'anno**, "
-                   f"pari a circa {formatta_numero(kg_giorno)} kg al giorno su "
-                   f"{GIORNI_OPERATIVI} giorni operativi.")
-        out.append("")
-        # le due componenti misurano cose diverse e non si sovrappongono:
-        # senza dirlo, il lettore sospetta un doppio conteggio
-        if ind and flotta:
-            out.append("Il valore somma due domande di natura diversa, che non si "
-                       "sovrappongono. La **domanda di processo** riguarda l'idrogeno "
-                       "impiegato dentro il ciclo produttivo delle imprese, come materia "
-                       "prima o come combustibile per il calore ad alta temperatura: non "
-                       "comprende i mezzi di quelle stesse aziende. La **domanda di "
-                       "mobilità** riguarda i veicoli, pubblici e privati, censiti "
-                       "separatamente. Sommarle è corretto, ma le due componenti "
-                       "rispondono a logiche distinte: la prima dipende dagli obblighi di "
-                       "decarbonizzazione industriale, la seconda dal ricambio delle "
-                       "flotte.")
-            out.append("")
-        out.append("### Ordini di grandezza")
-        out += ["| Riferimento | Valore |", "| --- | --- |",
-                f"| Domanda complessiva | {formatta_numero(dom)} t/anno |",
-                f"| Erogazione media giornaliera | {formatta_numero(kg_giorno)} kg/giorno |",
-                f"| Equivalente in autobus urbani alimentabili | {formatta_numero(bus_eq)} mezzi |",
-                f"| Gasolio sostituito | {formatta_numero(litri)} litri/anno |",
-                f"| Emissioni evitate al netto della produzione | {formatta_numero(co2)} tCO2/anno |", ""]
-        if quota_rfnbo is None:
-            out.append("> **Le emissioni evitate sono calcolate nell'ipotesi peggiore**, "
-                       "cioè idrogeno prodotto con elettricità di rete non certificata: in "
-                       f"quel caso ogni chilogrammo ne costa {formatta_numero(emissioni_h2(None))} "
-                       "di CO2, più dell'idrogeno da metano. Il percorso B, se sviluppato, "
-                       "restituisce la quota effettivamente conforme ai criteri RFNBO e il "
-                       "bilancio va ricalcolato su quella.")
-            out.append("")
-        elif quota_rfnbo < 100:
-            out.append(f"> Il calcolo tiene conto che solo il {formatta_numero(quota_rfnbo)}% "
-                       "dell'idrogeno risulta conforme ai criteri RFNBO: la parte restante "
-                       "viene prodotta con elettricità di rete e porta con sé "
-                       f"{formatta_numero(FATTORE_RETE_KG_CO2_KWH * CONSUMO_ELETTROLISI_KWH_KG)} "
-                       "kg di CO2 per kg di idrogeno.")
-            out.append("")
-        if co2_unit <= 0:
-            out.append("**La sostituzione peggiora il bilancio delle emissioni.** Con "
-                       "l'idrogeno prodotto nelle condizioni ipotizzate, ogni chilogrammo "
-                       "emette più CO2 del gasolio che sostituisce. Non è un difetto della "
-                       "tecnologia ma della sua alimentazione: finché l'elettrolisi non è "
-                       "certificata rinnovabile, la conversione dei mezzi non produce alcun "
-                       "beneficio climatico.")
-            out.append("")
-        out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
-                   f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
-                   f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
-                   f"idrogeno contro {formatta_numero(EFFICIENZA_DIESEL_KM_LITRO)} km/litro "
-                   "per il corrispondente diesel.")
-        out.append("")
+    out = [testo_da_template("A00-percorso_intro_it.md", {}, TESTO_PERCORSO_A_INTRO), ""]
 
-        # --- 2. giudizio sulla massa critica
-        out.append("### Massa critica")
-        if dom >= SOGLIA_MASSA_CRITICA_TON:
-            out.append(f"Il volume supera le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} "
-                       "t/anno assunte come soglia di sostenibilità economica per un "
-                       "progetto di conversione autonomo, corrispondenti a una flotta di "
-                       "una decina di mezzi pesanti in servizio continuo. **La domanda "
-                       "locale è di per sé sufficiente** a giustificare un'infrastruttura "
-                       "dedicata: la questione diventa la sua contrattualizzazione, non "
-                       "la sua esistenza.")
-        elif dom >= SOGLIA_DOMANDA_MINIMA_TON:
-            out.append(f"Il volume si colloca fra le {formatta_numero(SOGLIA_DOMANDA_MINIMA_TON)} "
-                       f"e le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno: **una "
-                       "fascia intermedia**, in cui un progetto autonomo resta fragile ma "
-                       "l'aggregazione con utenze di Comuni limitrofi, o con il traffico "
-                       "di transito, può portare rapidamente il bacino sopra la soglia di "
-                       "sostenibilità. È la situazione in cui la cooperazione "
-                       "sovracomunale produce il maggior beneficio marginale.")
-        else:
-            out.append(f"Il volume resta sotto le {formatta_numero(SOGLIA_DOMANDA_MINIMA_TON)} "
-                       "t/anno: **la domanda locale non basta** a sostenere una filiera "
-                       "dedicata. Questo non esclude l'idrogeno dal futuro del Comune, ma "
-                       "sposta il baricentro dell'azione: nel breve periodo conviene "
-                       "puntare su una fornitura esterna per usi dimostrativi, e nel medio "
-                       "periodo lavorare sull'aggregazione della domanda a scala d'ambito.")
-        out.append("")
-    else:
-        out.append("Per questo Comune non è stato quantificato un fabbisogno di idrogeno. "
-                   "L'analisi dei percorsi resta parziale finché i questionari sulla domanda "
-                   "industriale e sulle flotte non vengono completati.")
-        out.append("")
+    # --- le quattro rilevazioni
+    for sezione in (sezione_hta(riga), sezione_flotte(riga),
+                    sezione_nicchie(riga), sezione_termico(riga)):
+        if sezione:
+            out += [sezione, ""]
 
-    # --- 3. composizione della domanda
+    # --- bilancio complessivo, in chiusura
+    out.append(bilancio_domanda(riga, ind, flotta, dom))
+    return "\n".join(p for p in out if p is not None).strip()
+
+
+def bilancio_domanda(riga, ind, flotta, dom) -> str:
+    """Sintesi finale del percorso A: quanto pesa la domanda e cosa comporta."""
+    if not dom:
+        return ("### Bilancio della domanda\n\n"
+                "Per questo Comune non è stato quantificato alcun fabbisogno di idrogeno. "
+                "L'analisi dei percorsi resta parziale finché i questionari sulla domanda "
+                "industriale e sulle flotte non vengono completati: senza un volume, "
+                "nessuna delle valutazioni successive su produzione e logistica può essere "
+                "dimensionata.")
+
+    kg_giorno = dom * 1000 / GIORNI_OPERATIVI
+    bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
+    litri = dom * 1000 * LITRI_DIESEL_PER_KG_H2
+    co2_unit = co2_evitata_kg_per_kg_h2(riga)
+    co2 = dom * co2_unit
+    quota_rfnbo = numero(riga.get("T26_QUOTA_RFNBO_PERC"))
+
+    out = ["### Bilancio della domanda", ""]
+    out.append(f"Sommando le rilevazioni, la domanda potenziale complessiva del territorio "
+               f"ammonta a **{formatta_numero(dom)} tonnellate di idrogeno all'anno**, pari "
+               f"a circa {formatta_numero(kg_giorno)} kg al giorno su {GIORNI_OPERATIVI} "
+               "giorni operativi.")
+    out.append("")
+
     if ind and flotta:
         quota_ind = ind / (ind + flotta) * 100
-        out.append("### Composizione della domanda")
+        out.append("Il valore somma due domande di natura diversa, che non si "
+                   "sovrappongono. La **domanda di processo** riguarda l'idrogeno impiegato "
+                   "dentro il ciclo produttivo delle imprese, come materia prima o come "
+                   "combustibile per il calore ad alta temperatura: non comprende i mezzi "
+                   "di quelle stesse aziende. La **domanda di mobilità** riguarda i "
+                   "veicoli, pubblici e privati, censiti separatamente.")
+        out.append("")
         out += ["| Componente | Fabbisogno | Quota |", "| --- | --- | --- |",
                 f"| Processi industriali (Tool 2.1) | {formatta_numero(ind)} t/anno | "
                 f"{formatta_numero(quota_ind)}% |",
                 f"| Mobilità e flotte (Tool 2.2) | {formatta_numero(flotta)} t/anno | "
                 f"{formatta_numero(100 - quota_ind)}% |", ""]
+
         if quota_ind >= 70:
             out.append("La domanda è **trainata dall'industria**: il progetto va costruito "
                        "attorno agli utilizzatori privati, con il Comune nel ruolo di "
-                       "facilitatore autorizzativo e di garante del percorso partecipativo, "
+                       "facilitatore autorizzativo e garante del percorso partecipativo "
                        "più che di investitore diretto.")
         elif quota_ind <= 30:
             out.append("La domanda è **trainata dalla flotta pubblica**: il Comune ha "
-                       "controllo diretto sull'utenza principale, quindi può impegnare "
-                       "volumi certi in fase di gara. È la configurazione che rende più "
+                       "controllo diretto sull'utenza principale e può quindi impegnare "
+                       "volumi certi in sede di gara. È la configurazione che rende più "
                        "semplice la bancabilità, perché elimina il rischio di mercato.")
         else:
             out.append("Domanda pubblica e privata si equivalgono: la configurazione più "
@@ -1933,42 +2074,71 @@ def testo_percorso_a(riga) -> str:
                        "prima dell'investimento infrastrutturale.")
         out.append("")
 
-    # --- 4. comparto industriale (Tool 2.1)
-    industriale = sezione_hta(riga)
-    if industriale:
-        out.append(industriale)
+    # --- ordini di grandezza
+    out.append("#### Che cosa significano questi volumi")
+    out += ["| Riferimento | Valore |", "| --- | --- |",
+            f"| Domanda complessiva | {formatta_numero(dom)} t/anno |",
+            f"| Erogazione media giornaliera | {formatta_numero(kg_giorno)} kg/giorno |",
+            f"| Equivalente in autobus urbani alimentabili | {formatta_numero(bus_eq)} mezzi |",
+            f"| Gasolio sostituito | {formatta_numero(litri)} litri/anno |",
+            f"| Emissioni evitate al netto della produzione | {formatta_numero(co2)} tCO2/anno |", ""]
+
+    if quota_rfnbo is None:
+        out.append("> **Le emissioni evitate sono calcolate nell'ipotesi peggiore**, cioè "
+                   "idrogeno prodotto con elettricità di rete non certificata: in quel caso "
+                   f"ogni chilogrammo ne costa {formatta_numero(emissioni_h2(None))} di CO2, "
+                   "più dell'idrogeno da metano. Il percorso B, se sviluppato, restituisce "
+                   "la quota effettivamente conforme ai criteri RFNBO e il bilancio va "
+                   "ricalcolato su quella.")
+        out.append("")
+    elif quota_rfnbo < 100:
+        out.append(f"> Il calcolo tiene conto che solo il {formatta_numero(quota_rfnbo)}% "
+                   "dell'idrogeno risulta conforme ai criteri RFNBO: la parte restante viene "
+                   "prodotta con elettricità di rete e porta con sé "
+                   f"{formatta_numero(FATTORE_RETE_KG_CO2_KWH * CONSUMO_ELETTROLISI_KWH_KG)} "
+                   "kg di CO2 per kg di idrogeno.")
         out.append("")
 
-    # --- 4bis. concentrazione del rischio
-    n_az = numero(riga.get("T21_N_AZIENDE_IDONEE")) or len(costruisci_aziende(riga))
-    if n_az:
-        if n_az == 1:
-            out.append("La presenza di un solo utilizzatore industriale concentra tutto "
-                       "il rischio di mercato su una controparte: prima di qualunque "
-                       "investimento serve un impegno contrattuale di lungo periodo, "
-                       "oppure l'individuazione di utenze alternative.")
-            out.append("")
-        elif n_az >= 3:
-            out.append("La pluralità di utilizzatori distribuisce il rischio e rende "
-                       "credibile un contratto di fornitura aggregato. Il passo "
-                       "successivo è verificare la contiguità territoriale delle "
-                       "aziende, che determina se convenga una rete locale o un "
-                       "rifornimento su strada.")
-            out.append("")
+    if co2_unit <= 0:
+        out.append("**La sostituzione peggiora il bilancio delle emissioni.** Con l'idrogeno "
+                   "prodotto nelle condizioni ipotizzate, ogni chilogrammo emette più CO2 "
+                   "del gasolio che sostituisce. Non è un difetto della tecnologia ma della "
+                   "sua alimentazione: finché l'elettrolisi non è certificata rinnovabile, "
+                   "la conversione non produce alcun beneficio climatico.")
+        out.append("")
 
-    # --- 5. flotte e mobilità (Tool 2.2)
-    out.append(sezione_flotte(riga))
+    # --- massa critica
+    out.append("#### Massa critica")
+    if dom >= SOGLIA_MASSA_CRITICA_TON:
+        out.append(f"Il volume supera le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno "
+                   "assunte come soglia di sostenibilità economica per un progetto di "
+                   "conversione autonomo, corrispondenti a una flotta di una decina di mezzi "
+                   "pesanti in servizio continuo. **La domanda locale è di per sé "
+                   "sufficiente** a giustificare un'infrastruttura dedicata: la questione "
+                   "diventa la sua contrattualizzazione, non la sua esistenza.")
+    elif dom >= SOGLIA_DOMANDA_MINIMA_TON:
+        out.append(f"Il volume si colloca fra le {formatta_numero(SOGLIA_DOMANDA_MINIMA_TON)} "
+                   f"e le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno: **una fascia "
+                   "intermedia**, in cui un progetto autonomo resta fragile ma l'aggregazione "
+                   "con utenze di Comuni limitrofi, o con il traffico di transito, può "
+                   "portare rapidamente il bacino sopra la soglia di sostenibilità. È la "
+                   "situazione in cui la cooperazione sovracomunale produce il maggior "
+                   "beneficio marginale.")
+    else:
+        out.append(f"Il volume resta sotto le {formatta_numero(SOGLIA_DOMANDA_MINIMA_TON)} "
+                   "t/anno: **la domanda locale non basta** a sostenere una filiera "
+                   "dedicata. Questo non esclude l'idrogeno dal futuro del Comune, ma sposta "
+                   "il baricentro dell'azione: nel breve periodo conviene puntare su una "
+                   "fornitura esterna per usi dimostrativi, e nel medio periodo lavorare "
+                   "sull'aggregazione della domanda a scala d'ambito.")
     out.append("")
+    out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
+               f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
+               f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
+               f"idrogeno contro {formatta_numero(EFFICIENZA_DIESEL_KM_LITRO)} km/litro per "
+               "il corrispondente diesel.")
 
-    # --- 6. usi di nicchia (Tool 2.3)
-    out.append(sezione_nicchie(riga))
-    out.append("")
-
-    # --- 7. fabbisogno termico (Tool 2.4)
-    out.append(sezione_termico(riga))
-    out.append("")
-
-    return "\n".join(out).strip()
+    return "\n".join(out)
 
 
 def commento_percorso(riga, codice: str) -> str:
@@ -1977,7 +2147,9 @@ def commento_percorso(riga, codice: str) -> str:
         return testo_percorso_a(riga)
 
     if codice == "B":
-        parti = [sezione_aree(riga), sezione_produzione(riga)]
+        parti = [testo_da_template("B00-percorso_intro_it.md", {},
+                                   TESTO_PERCORSO_B_INTRO),
+                 sezione_aree(riga), sezione_produzione(riga)]
         return "\n\n".join(p for p in parti if p)
 
     if codice == "C":
