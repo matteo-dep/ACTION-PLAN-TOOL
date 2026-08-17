@@ -117,7 +117,10 @@ def spezza_grassetto(testo: str):
                 continue
             if frammento.isdigit() and int(frammento) < len(link):
                 etichetta, url = link[int(frammento)]
-                parti.append((etichetta, grassetto, url))
+                # un **grassetto** scritto dentro l'etichetta di un collegamento
+                # non è interpretabile: il link ha già una sua evidenza grafica
+                pulita = etichetta.replace("**", "")
+                parti.append((pulita, grassetto or etichetta != pulita, url))
             else:
                 parti.append((frammento.replace("**", ""), grassetto, None))
     return parti
@@ -205,15 +208,73 @@ class H2ReadyPDF(FPDF):
                   align="C")
 
 
+def _unita_di_parola(parti):
+    """Raggruppa i frammenti in parole intere.
+
+    Serve perché un cambio di stile a metà parola — come in "l'**elettrificazione**" —
+    farebbe perdere a fpdf la cognizione che i due pezzi sono attaccati, e la parola
+    verrebbe spezzata a fine riga in un punto qualsiasi.
+    Ogni unità è una lista di (testo, grassetto, url) da scrivere senza interruzione.
+    """
+    unita, corrente, attaccato = [], [], False
+    for testo, grassetto, url in parti:
+        pezzi = re.split(r"(\s+)", testo)
+        for pezzo in pezzi:
+            if pezzo == "":
+                continue
+            if pezzo.isspace():
+                if corrente:
+                    unita.append(corrente)
+                    corrente = []
+                unita.append(None)          # separatore: spazio
+                attaccato = False
+                continue
+            corrente.append((pezzo, grassetto, url))
+            attaccato = True
+    if corrente:
+        unita.append(corrente)
+    return unita
+
+
 def _pdf_inline(pdf, testo, size, h):
-    for parte, grassetto, url in spezza_grassetto(testo):
-        pdf.font("B" if grassetto else "", size)
-        if url:
-            pdf.set_text_color(*BLU)
-            pdf.write(h, pdf.txt(parte), link=url)
-            pdf.set_text_color(0, 0, 0)
-        else:
-            pdf.write(h, pdf.txt(parte))
+    """Scrive un paragrafo andando a capo solo fra una parola e l'altra."""
+    limite = pdf.w - pdf.r_margin - 2.0
+
+    def larghezza(gruppo):
+        totale = 0.0
+        for frammento, grassetto, _ in gruppo:
+            pdf.font("B" if grassetto else "", size)
+            totale += pdf.get_string_width(pdf.txt(frammento))
+        return totale
+
+    pdf.font("", size)
+    spazio = pdf.get_string_width(" ")
+    unita = [u for u in _unita_di_parola(spezza_grassetto(testo))]
+    parole = [u for u in unita if u is not None]
+    primo = True
+
+    for i, gruppo in enumerate(parole):
+        larga = larghezza(gruppo)
+        prefisso = 0.0 if primo else spazio
+        if not primo:
+            # lo spazio si scrive solo se anche la parola che segue entra nella
+            # riga: altrimenti resterebbe appeso in fondo e la parola verrebbe
+            # spezzata dal ritorno a capo automatico di fpdf
+            if pdf.get_x() + prefisso + larga > limite:
+                pdf.ln(h)
+                pdf.set_x(pdf.l_margin)
+            else:
+                pdf.font("", size)
+                pdf.write(h, " ")
+        for frammento, grassetto, url in gruppo:
+            pdf.font("B" if grassetto else "", size)
+            if url:
+                pdf.set_text_color(*BLU)
+                pdf.write(h, pdf.txt(frammento), link=url)
+                pdf.set_text_color(0, 0, 0)
+            else:
+                pdf.write(h, pdf.txt(frammento))
+        primo = False
     pdf.ln(h)
 
 
@@ -223,7 +284,6 @@ def _pdf_tabella(pdf, dati):
     n = max(len(r) for r in dati)
     dati = [list(r) + [""] * (n - len(r)) for r in dati]
 
-    # larghezza proporzionale alla lunghezza tipica del contenuto di ogni colonna
     lunghezze = []
     for j in range(n):
         massimo = max(len(str(r[j])) for r in dati)
