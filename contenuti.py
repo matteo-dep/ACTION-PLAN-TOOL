@@ -209,23 +209,10 @@ PERCORSI = [
         "codice": "C",
         "titolo": "Percorso C - Transito e rifornimento",
         "blocchi": [
-            ("Vocazione al transito (Tool 2.7)", [
-                "T27_TGM_CAMION", "T27_DISTANZA_SNAM_KM", "T27_SCORE_C1", "T27_SCORE_C2",
-                "T27_SCORE_C3", "T27_SCORE_GOV", "T27_FLAG_AREE_700BAR",
-                "T27_FLAG_AFIR_GAP", "T27_FLAG_HUB_MERCI", "T27_FLAG_SINERGIA_HTA",
-                "T27_FLAG_ACCORDI_FILIERA", "T27_FLAG_PUMS"]),
-            ("Stazione di rifornimento (Tool 2.8)", [
-                "T28_TAGLIA_HRS", "T28_CONFIGURAZIONE", "T28_CAPACITA_KG_GIORNO",
-                "T28_N_DISPENSER", "T28_STRATEGIA_SUPPLY", "T28_POTENZA_COMPRESSORE_KW",
-                "T28_AREA_MINIMA_MQ", "T28_CAPEX_COMPLESSIVO_EURO",
-                "T28_BREAK_EVEN_EURO_KG", "T28_ORIZZONTE", "T28_QUOTA_FCEV_PERC"]),
         ],
     },
 ]
 
-# T21_*: già trattate per esteso nella sezione 2.1, non si ripetono in tabella
-# I dati dei tool 2.1, 2.2 e 2.3 sono discussi per esteso nel testo del percorso A:
-# ripeterli in tabella allungherebbe il documento senza aggiungere nulla.
 ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T12_SCORE_A", "T12_SCORE_B", "T12_SCORE_C",
            "T21_N_AZIENDE_IDONEE", "T21_NOMI_AZIENDE", "T21_FABBISOGNO_H2_TON_ANNO",
@@ -253,7 +240,16 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T26_TAGLIA_ELETTROLIZZATORE_MW", "T26_CAPACITA_BESS_MWH",
            "T26_PRODUZIONE_H2_TON_ANNO", "T26_QUOTA_RFNBO_PERC", "T26_CURTAILMENT_PERC",
            "T26_COPERTURA_PERC", "T26_CAPEX_CONNESSIONI_EURO", "T26_CAPEX_TOTALE_MLN",
-           "T26_LCOH_EURO_KG", "T26_PAYBACK_ANNI", "T26B_SUP_TERRA_HA"}
+           "T26_LCOH_EURO_KG", "T26_PAYBACK_ANNI", "T26B_SUP_TERRA_HA",
+           "T27_TGM_CAMION", "T27_DISTANZA_SNAM_KM", "T27_SCORE_C1", "T27_SCORE_C2",
+           "T27_SCORE_C3", "T27_SCORE_GOV", "T27_FLAG_AREE_700BAR",
+           "T27_FLAG_AFIR_GAP", "T27_FLAG_HUB_MERCI", "T27_FLAG_SINERGIA_HTA",
+           "T27_FLAG_ACCORDI_FILIERA", "T27_FLAG_PUMS",
+           "T28_CAPACITA_KG_GIORNO", "T28_TAGLIA_HRS", "T28_STRATEGIA_SUPPLY",
+           "T28_POTENZA_COMPRESSORE_KW", "T28_AREA_MINIMA_MQ",
+           "T28_CAPEX_COMPLESSIVO_EURO", "T28_BREAK_EVEN_EURO_KG",
+           "T28_CONFIGURAZIONE", "T28_N_DISPENSER", "T28_ORIZZONTE",
+           "T28_QUOTA_FCEV_PERC"}
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
@@ -387,6 +383,30 @@ ETICHETTE = {
     "T12_FLAG_JOINT_PROCUREMENT": "Disponibilità ad appalti congiunti",
 }
 
+
+
+# =============================================================================
+# PARAMETRI DEL PERCORSO C
+# =============================================================================
+
+# Traffico pesante giornaliero sul nodo. Le soglie servono a distinguere una
+# direttrice di attraversamento da una viabilità locale.
+TGM_DIRETTRICE = 1000.0       # oltre: nodo di transito vero e proprio
+TGM_MINIMO = 200.0            # sotto: il traffico non regge da solo una stazione
+
+# Taglia minima prevista dal regolamento AFIR per le stazioni della rete TEN-T.
+CAPACITA_AFIR_KG_GIORNO = 1000.0
+DISTANZA_AFIR_KM = 200.0
+
+# Prezzo alla pompa. Il riferimento non è il gasolio ma ciò che un operatore di
+# trasporto accetta di pagare a parità di costo chilometrico: con un mezzo a
+# celle a combustibile che percorre circa 11,4 km/kg contro 3,5 km/litro del
+# diesel, un chilogrammo di idrogeno vale poco più di tre litri di gasolio.
+PREZZO_POMPA_SOSTENIBILE = 9.0    # sotto: competitivo con il diesel odierno
+PREZZO_POMPA_CRITICO = 14.0       # sopra: fuori mercato senza obblighi normativi
+
+# Area minima di un lotto per una stazione, dal DM 23/10/2018.
+AREA_HRS_ATTENZIONE_MQ = 5000.0
 
 # =============================================================================
 # PARAMETRI DEL PERCORSO B
@@ -2054,6 +2074,321 @@ finale fra le componenti dice quale sarà la vera natura del progetto comunale.
 """
 
 
+
+TESTO_PERCORSO_C_INTRO = """## Percorso C - Il transito e la logistica
+
+I primi due percorsi guardano dentro i confini comunali: chi consuma, chi può
+produrre. Il terzo guarda a chi passa.
+
+Un nodo logistico non deve avere né industrie energivore né grandi superfici per
+avere un ruolo nella filiera dell'idrogeno: gli basta trovarsi lungo una direttrice
+percorsa da mezzi pesanti che, per obbligo normativo, dovranno rifornirsi da
+qualche parte. È una domanda che non appartiene al territorio ma lo attraversa, e
+che si cattura soltanto se c'è una stazione dove fermarsi.
+
+La differenza rispetto ai percorsi precedenti è sostanziale. La domanda locale si
+conosce, si contratta e si pianifica; quella di transito si stima, dipende da come
+altri costruiscono la propria rete e va contesa. Il regolamento europeo **AFIR**
+impone una stazione di rifornimento a idrogeno ogni duecento chilometri lungo la
+rete centrale TEN-T entro il 2030: chi si colloca in un vuoto di quella maglia ha
+un vantaggio che nessun altro fattore locale può replicare, ma è un vantaggio che
+si esaurisce nel momento in cui qualcun altro lo colma per primo.
+
+L'analisi procede in due passaggi: la valutazione della vocazione del nodo, e il
+dimensionamento della stazione che quella vocazione giustificherebbe.
+"""
+
+TESTO_TRANSITO_PREDEFINITO = """### Vocazione al transito (Tool 2.7)
+
+La posizione di un Comune lungo le direttrici di traffico non è un dato che
+l'amministrazione può modificare: è una condizione data, che si sfrutta o si
+ignora. Quello che l'amministrazione può fare è riconoscerla per tempo e
+predisporre gli strumenti urbanistici perché, quando un operatore cercherà un sito,
+il territorio sia pronto e non debba avviare una variante.
+"""
+
+
+def sezione_transito(riga) -> str:
+    """Sezione 2.7: vocazione logistica del nodo."""
+    tgm = numero(riga.get("T27_TGM_CAMION"))
+    snam = numero(riga.get("T27_DISTANZA_SNAM_KM"))
+    scores = {c: numero(riga.get(c)) for c in
+              ("T27_SCORE_C1", "T27_SCORE_C2", "T27_SCORE_C3", "T27_SCORE_GOV")}
+    if tgm is None and all(v is None for v in scores.values()):
+        return ""
+
+    out = [testo_da_template("C27-transito_intro_it.md", {},
+                             TESTO_TRANSITO_PREDEFINITO), ""]
+
+    # --- flussi
+    if tgm is not None:
+        annui = tgm * 365
+        out.append("#### Flussi di traffico")
+        out += ["| Parametro | Valore |", "| --- | --- |",
+                f"| Traffico giornaliero medio di mezzi pesanti | {formatta_numero(tgm)} mezzi/giorno |",
+                f"| Transiti annui | {formatta_numero(annui)} mezzi/anno |"]
+        if snam is not None:
+            out.append(f"| Distanza dalla dorsale di trasporto | {formatta_numero(snam)} km |")
+        out.append("")
+
+        if tgm >= TGM_DIRETTRICE:
+            out.append(f"Con {formatta_numero(tgm)} mezzi pesanti al giorno il nodo si "
+                       "colloca su una **direttrice di attraversamento**, non su viabilità "
+                       "locale. È il presupposto perché una stazione di rifornimento abbia "
+                       "senso: il volume c'è, e la questione diventa quanta parte di quel "
+                       "flusso si riesce effettivamente a intercettare.")
+        elif tgm >= TGM_MINIMO:
+            out.append(f"I {formatta_numero(tgm)} mezzi al giorno collocano il nodo in una "
+                       "**fascia intermedia**. Il traffico da solo non basta a giustificare "
+                       "una stazione, ma può concorrere insieme ad altre componenti: una "
+                       "flotta locale, un'utenza industriale, un hub logistico. La "
+                       "stazione, se si farà, non sarà di puro transito.")
+        else:
+            out.append(f"Con {formatta_numero(tgm)} mezzi al giorno **il traffico non "
+                       "sostiene una stazione di rifornimento**. Non è un limite del "
+                       "territorio ma una sua caratteristica: la vocazione al transito "
+                       "richiede volumi che qui non ci sono, e le risorse rendono di più "
+                       "sugli altri due percorsi.")
+        out.append("")
+
+    # --- fattori qualificanti
+    fattori = [
+        ("T27_FLAG_AFIR_GAP", "Colma un vuoto della rete AFIR",
+         "È il fattore singolo più rilevante di questa sezione. Il regolamento "
+         f"europeo impone una stazione ogni {formatta_numero(DISTANZA_AFIR_KM)} km "
+         "lungo la rete centrale TEN-T entro il 2030: dove quella maglia ha un "
+         "vuoto, la domanda non dipende dalle scelte commerciali degli operatori "
+         "ma da un obbligo di legge. È anche la condizione che rende accessibili i "
+         "canali di finanziamento europei dedicati alle infrastrutture di "
+         "rifornimento."),
+        ("T27_FLAG_HUB_MERCI", "Hub merci o interporti entro 5 km",
+         "Cambia la natura della domanda: i mezzi che fanno capo a un interporto "
+         "rientrano in deposito con regolarità, quindi la quota catturabile è molto "
+         "più alta di quella di un nodo attraversato da traffico occasionale. Una "
+         "domanda che rientra è una domanda contrattualizzabile."),
+        ("T27_FLAG_SINERGIA_HTA", "Distretto Hard-to-Abate confinante",
+         "Apre la possibilità di condividere produzione e stoccaggio con l'utenza "
+         "industriale invece di costruirli per la sola stazione. È la "
+         "configurazione economicamente più solida, perché ripartisce i costi fissi "
+         "su due domande diverse e complementari: l'industria consuma in modo "
+         "costante, il transito a picchi."),
+        ("T27_FLAG_ACCORDI_FILIERA", "Accordi di filiera già attivi",
+         "Indica che gli operatori del territorio si parlano già. È un capitale "
+         "relazionale che accorcia i tempi: la parte più lenta di questi progetti "
+         "non è la costruzione ma la costruzione del consenso fra chi dovrà usarli."),
+        ("T27_FLAG_PUMS", "Idrogeno nella pianificazione della mobilità",
+         "Se i corridoi e le aree per il rifornimento sono già negli strumenti "
+         "urbanistici, l'iter autorizzativo si accorcia di anni. In caso contrario "
+         "è il primo intervento da programmare, perché non costa nulla e va fatto "
+         "comunque prima di qualunque investimento."),
+    ]
+    presenti = [(et, testo) for col, et, testo in fattori
+                if col in riga.index and vero(riga[col])]
+    assenti = [(et, testo) for col, et, testo in fattori
+               if col in riga.index and not is_vuoto(riga[col]) and not vero(riga[col])]
+
+    if presenti:
+        out.append("#### Fattori favorevoli rilevati")
+        for et, testo in presenti:
+            out.append(f"**{et}.** {testo}")
+            out.append("")
+
+    if assenti:
+        out.append("#### Fattori non presenti")
+        out.append("Le condizioni che seguono non ricorrono sul territorio. Non sono "
+                   "preclusive, ma la loro assenza va messa in conto quando si valuta "
+                   "quanta parte del traffico la stazione riuscirà a catturare.")
+        out += [f"- {et}" for et, _ in assenti]
+        out.append("")
+
+    # --- punteggi
+    validi = {k: v for k, v in scores.items() if v is not None}
+    if validi:
+        etichette = {"T27_SCORE_C1": "Flussi di traffico",
+                     "T27_SCORE_C2": "Infrastrutture di supporto",
+                     "T27_SCORE_C3": "Contesto territoriale",
+                     "T27_SCORE_GOV": "Governance e pianificazione"}
+        out.append("#### Punteggi di valutazione")
+        out += ["| Dimensione | Punteggio |", "| --- | --- |"]
+        out += [f"| {etichette[k]} | {formatta_numero(v)} |" for k, v in validi.items()]
+        out.append("")
+        gov = validi.get("T27_SCORE_GOV")
+        tecnici = [v for k, v in validi.items() if k != "T27_SCORE_GOV"]
+        if gov is not None and tecnici:
+            media_tec = sum(tecnici) / len(tecnici)
+            if gov < media_tec * 0.7:
+                out.append("Il punteggio di governance è sensibilmente inferiore a quello "
+                           "delle dimensioni tecniche: il territorio ha le caratteristiche "
+                           "fisiche adatte ma non ancora gli strumenti amministrativi per "
+                           "valorizzarle. È la situazione più facile da correggere, perché "
+                           "dipende interamente da decisioni dell'amministrazione.")
+            elif media_tec < gov * 0.7:
+                out.append("La governance è più avanzata delle condizioni fisiche del nodo: "
+                           "l'amministrazione è pronta, ma il territorio non offre i flussi "
+                           "che giustificherebbero una stazione. Conviene indirizzare quella "
+                           "capacità amministrativa sugli altri percorsi.")
+            out.append("")
+
+    return "\n".join(out).strip()
+
+
+TESTO_HRS_PREDEFINITO = """### Dimensionamento della stazione (Tool 2.8)
+
+Una stazione di rifornimento a idrogeno non è un distributore con un serbatoio
+diverso. È un impianto in pressione, con compressori che portano il gas fino a
+settecento bar, sistemi di preraffreddamento che lo raffreddano a meno quaranta
+gradi prima dell'erogazione, e stoccaggi che devono garantire il rifornimento anche
+quando la fornitura si interrompe.
+
+Ne discende che i costi sono in larga parte fissi e indipendenti dai volumi
+erogati: la stessa stazione che serve dieci mezzi al giorno ne può servire trenta
+con un aumento marginale di spesa. È la ragione per cui il parametro che decide
+tutto non è il costo dell'impianto ma la sua saturazione.
+"""
+
+
+def sezione_hrs(riga) -> str:
+    """Sezione 2.8: dimensionamento e sostenibilità della stazione."""
+    capacita = numero(riga.get("T28_CAPACITA_KG_GIORNO"))
+    taglia = riga.get("T28_TAGLIA_HRS")
+    config = riga.get("T28_CONFIGURAZIONE")
+    supply = riga.get("T28_STRATEGIA_SUPPLY")
+    potenza = numero(riga.get("T28_POTENZA_COMPRESSORE_KW"))
+    dispenser = numero(riga.get("T28_N_DISPENSER"))
+    area = numero(riga.get("T28_AREA_MINIMA_MQ"))
+    capex = numero(riga.get("T28_CAPEX_COMPLESSIVO_EURO"))
+    breakeven = numero(riga.get("T28_BREAK_EVEN_EURO_KG"))
+    orizzonte = riga.get("T28_ORIZZONTE")
+    quota_fcev = numero(riga.get("T28_QUOTA_FCEV_PERC"))
+
+    if capacita is None and capex is None:
+        return ""
+
+    out = [testo_da_template("C28-hrs_intro_it.md", {}, TESTO_HRS_PREDEFINITO), ""]
+
+    if not is_vuoto(orizzonte) and str(orizzonte).strip().lower() != "attuale":
+        testo_quota = (f", con una quota di veicoli a celle a combustibile del "
+                       f"{formatta_numero(quota_fcev)}% sul circolante pesante"
+                       if quota_fcev else "")
+        out.append(f"Il dimensionamento è riferito all'orizzonte **{str(orizzonte).strip()}**"
+                   + testo_quota + ".")
+        out.append("")
+
+    # --- configurazione
+    righe = []
+    if not is_vuoto(config):
+        righe.append(f"| Configurazione | {str(config).strip()} |")
+    if not is_vuoto(taglia):
+        righe.append(f"| Taglia | {str(taglia).strip()} |")
+    if capacita:
+        righe.append(f"| Capacità di erogazione | {formatta_numero(capacita)} kg/giorno |")
+        righe.append(f"| Su base annua | {formatta_numero(capacita * 365 / 1000)} t/anno |")
+    if dispenser:
+        righe.append(f"| Punti di erogazione | {formatta_numero(dispenser)} |")
+    if potenza:
+        righe.append(f"| Potenza di compressione | {formatta_numero(potenza)} kW |")
+    if not is_vuoto(supply):
+        righe.append(f"| Approvvigionamento | {str(supply).strip()} |")
+    if righe:
+        out.append("#### Configurazione della stazione")
+        out += ["| Parametro | Valore |", "| --- | --- |"] + righe + [""]
+
+    # --- conformità AFIR
+    if capacita:
+        if capacita >= CAPACITA_AFIR_KG_GIORNO:
+            out.append(f"Con {formatta_numero(capacita)} kg al giorno la stazione **soddisfa "
+                       "il requisito di capacità previsto dal regolamento AFIR** per le "
+                       "stazioni della rete centrale TEN-T, fissato a una tonnellata "
+                       "giornaliera. È la condizione per concorrere ai canali di "
+                       "finanziamento europei dedicati e per essere computata nella rete "
+                       "obbligatoria.")
+        else:
+            out.append(f"La capacità di {formatta_numero(capacita)} kg al giorno resta sotto "
+                       f"la tonnellata prevista dal regolamento AFIR per la rete centrale "
+                       "TEN-T. La stazione può servire una domanda locale, ma non concorre "
+                       "alla rete obbligatoria né ai canali di finanziamento a essa "
+                       "collegati: è una scelta legittima, purché consapevole.")
+        out.append("")
+
+    # --- economia
+    if capex is not None or breakeven is not None:
+        out.append("#### Sostenibilità economica")
+        righe = []
+        if capex:
+            righe.append(f"| Investimento complessivo | Euro {formatta_numero(capex)} |")
+            if capacita:
+                per_kg = capex / (capacita * 365)
+                righe.append(f"| Investimento per kg erogato all'anno | Euro {formatta_numero(per_kg)} |")
+        if breakeven is not None:
+            righe.append(f"| Prezzo minimo alla pompa | Euro {formatta_numero(breakeven)}/kg |")
+        out += ["| Voce | Valore |", "| --- | --- |"] + righe + [""]
+
+        if breakeven is not None:
+            litri = LITRI_DIESEL_PER_KG_H2
+            equiv = breakeven / litri
+            out.append(f"Un chilogrammo di idrogeno percorre quanto circa "
+                       f"{formatta_numero(litri)} litri di gasolio: il prezzo di "
+                       f"{formatta_numero(breakeven)} Euro/kg equivale quindi a "
+                       f"{formatta_numero(equiv)} Euro per litro equivalente di gasolio.")
+            out.append("")
+            if breakeven <= PREZZO_POMPA_SOSTENIBILE:
+                out.append("È un valore **competitivo**: a queste condizioni un operatore di "
+                           "trasporto non paga la conversione più di quanto pagherebbe il "
+                           "diesel, e la scelta smette di dipendere dagli incentivi.")
+            elif breakeven <= PREZZO_POMPA_CRITICO:
+                out.append("È un valore **sostenibile solo per chi ha un obbligo**: le "
+                           "imprese soggette a vincoli di decarbonizzazione lo accettano "
+                           "perché l'alternativa è una sanzione, gli altri no. La stazione "
+                           "regge se la clientela è prevalentemente vincolata, e va "
+                           "verificato che lo sia.")
+            else:
+                out.append("È un valore **fuori mercato**. Nella maggior parte dei casi la "
+                           "causa non è il costo dell'impianto ma la sua saturazione: pochi "
+                           "mezzi al giorno spalmano i costi fissi su volumi troppo piccoli. "
+                           "Prima di rivedere la tecnologia conviene rivedere la domanda, "
+                           "cercando utenze aggiuntive o una collocazione diversa.")
+            out.append("")
+
+    # --- vincoli fisici e coerenza con il territorio
+    verifiche = []
+    if area:
+        verifiche.append(f"Il decreto ministeriale 23 ottobre 2018 impone distanze di "
+                         f"sicurezza che si traducono in un lotto di almeno "
+                         f"**{formatta_numero(area)} m²**"
+                         + (". È una superficie che in ambito urbano è raramente "
+                            "disponibile senza una variante urbanistica: va individuata "
+                            "prima di ogni altra cosa."
+                            if area >= AREA_HRS_ATTENZIONE_MQ else
+                            ", superficie compatibile con un'area di servizio ordinaria."))
+    if not is_vuoto(riga.get("T27_FLAG_AREE_700BAR")) and not vero(riga.get("T27_FLAG_AREE_700BAR")):
+        verifiche.append("Dal questionario 2.7 non risultano aree a piano regolatore "
+                         "compatibili con lo stoccaggio a 700 bar. È il vincolo che più "
+                         "spesso blocca questi progetti in fase autorizzativa, e va "
+                         "affrontato con l'ufficio urbanistica prima di qualunque "
+                         "investimento progettuale.")
+
+    prod_locale = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
+    if prod_locale and capacita:
+        annuo = capacita * 365 / 1000
+        if prod_locale >= annuo:
+            verifiche.append(f"La produzione locale prevista dal percorso B "
+                             f"({formatta_numero(prod_locale)} t/anno) copre interamente il "
+                             f"fabbisogno della stazione ({formatta_numero(annuo)} t/anno): "
+                             "la filiera si chiude sul territorio, senza trasporto della "
+                             "molecola e senza dipendenza da fornitori esterni.")
+        else:
+            verifiche.append(f"La produzione locale ({formatta_numero(prod_locale)} t/anno) "
+                             f"copre il {formatta_numero(prod_locale / annuo * 100)}% del "
+                             "fabbisogno della stazione: la quota restante va acquistata "
+                             "all'esterno, con il costo di trasporto che ne consegue.")
+
+    if verifiche:
+        out.append("#### Vincoli e verifiche")
+        out += [f"- {v}" for v in verifiche] + [""]
+
+    return "\n".join(out).strip()
+
+
 def testo_percorso_a(riga) -> str:
     """Percorso A: introduzione, quattro rilevazioni, bilancio finale."""
     ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
@@ -2207,16 +2542,11 @@ def commento_percorso(riga, codice: str) -> str:
         return "\n\n".join(p for p in parti if p)
 
     if codice == "C":
-        tgm = numero(riga.get("T27_TGM_CAMION"))
-        cap = numero(riga.get("T28_CAPACITA_KG_GIORNO"))
-        parti = []
-        if tgm:
-            parti.append(f"Il traffico pesante rilevato è di **{formatta_numero(tgm)} "
-                         "mezzi al giorno**.")
-        if cap:
-            parti.append(f"La stazione ipotizzata erogherebbe {formatta_numero(cap)} kg "
-                         "al giorno.")
-        return " ".join(parti)
+        parti = [testo_da_template("C00-percorso_intro_it.md", {},
+                                   TESTO_PERCORSO_C_INTRO),
+                 sezione_transito(riga), sezione_hrs(riga)]
+        return "\n\n".join(p for p in parti if p)
+
     return ""
 
 
