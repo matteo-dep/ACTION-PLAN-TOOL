@@ -126,6 +126,74 @@ def spezza_grassetto(testo: str):
     return parti
 
 
+
+# =============================================================================
+# INDICE
+# =============================================================================
+
+def _registra(pdf, titolo, livello):
+    """Annota un titolo per l'indice, con la pagina in cui compare."""
+    if not hasattr(pdf, "voci_indice"):
+        pdf.voci_indice = []
+    # si registra la pagina che ospiterà davvero il titolo: se lo spazio residuo
+    # non basta, il titolo scivola alla pagina successiva e l'indice sbaglierebbe
+    if pdf.get_y() > pdf.h - 45:
+        pdf.add_page()
+    pdf.voci_indice.append((livello, str(titolo), pdf.page_no()))
+
+
+def _scrivi_indice(pdf, voci, offset):
+    """Compone la pagina di indice. offset è il numero di pagine che l'indice
+    stesso occupa, da sommare ai numeri raccolti nella prima passata."""
+    pdf.font("B", 17)
+    pdf.set_text_color(*BLU)
+    pdf.multi_cell(0, 11, pdf.txt("Indice"))
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(6)
+
+    larghezza = pdf.w - pdf.l_margin - pdf.r_margin
+    for livello, titolo, pagina in voci:
+        # 0 = passo, 1 = titolo di sezione, 2 = sottosezione
+        if livello == 0:
+            pdf.ln(3)
+            pdf.font("B", 11)
+            pdf.set_text_color(*BLU)
+            rientro = 0
+        elif livello == 1:
+            pdf.font("B", 10)
+            pdf.set_text_color(0, 0, 0)
+            rientro = 5
+        else:
+            pdf.font("", 9.5)
+            pdf.set_text_color(70, 78, 90)
+            rientro = 11
+
+        numero_pagina = str(pagina + offset)
+        pdf.set_x(pdf.l_margin + rientro)
+        testo = pdf.txt(titolo)
+        larghezza_num = pdf.get_string_width(numero_pagina)
+        disponibile = larghezza - rientro - larghezza_num - 4
+
+        # il titolo si accorcia se non entra: l'indice deve restare su una riga
+        while pdf.get_string_width(testo) > disponibile and len(testo) > 12:
+            testo = testo[:-2]
+        if pdf.get_string_width(pdf.txt(titolo)) > disponibile:
+            testo += "..."
+
+        pdf.cell(pdf.get_string_width(testo), 6, testo)
+        puntini = ""
+        larghezza_punto = pdf.get_string_width(".")
+        spazio = larghezza - rientro - pdf.get_string_width(testo) - larghezza_num - 2
+        if larghezza_punto > 0:
+            pdf.set_text_color(170, 176, 186)
+            puntini = "." * max(0, int(spazio / larghezza_punto))
+            pdf.cell(spazio, 6, puntini)
+            pdf.set_text_color(0, 0, 0)
+        pdf.cell(larghezza_num + 2, 6, numero_pagina, align="R",
+                 new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+
+
 # =============================================================================
 # PDF
 # =============================================================================
@@ -359,16 +427,19 @@ def scrivi_markdown_pdf(pdf, md: str):
             pdf.ln(4)
         elif tipo == "h1":
             pdf.ln(2); pdf.font("B", 17); pdf.set_text_color(*BLU)
+            _registra(pdf, contenuto, 1)
             pdf.multi_cell(0, 11, pdf.txt(contenuto))
             pdf.set_text_color(0, 0, 0); pdf.ln(3)
         elif tipo == "h2":
             pdf.ln(4); pdf.font("B", 14); pdf.set_text_color(*BLU)
+            _registra(pdf, contenuto, 1)
             pdf.multi_cell(0, 9, pdf.txt(contenuto))
             pdf.set_draw_color(*BLU)
             pdf.line(pdf.l_margin, pdf.get_y() + 1, pdf.l_margin + 35, pdf.get_y() + 1)
             pdf.set_text_color(0, 0, 0); pdf.ln(4)
         elif tipo == "h3":
             pdf.ln(3); pdf.font("B", 12); pdf.set_text_color(*BLU)
+            _registra(pdf, contenuto, 2)
             pdf.multi_cell(0, 8, pdf.txt(contenuto))
             pdf.set_text_color(0, 0, 0); pdf.ln(1)
         elif tipo == "h4":
@@ -458,20 +529,28 @@ PASSI = [
     ("Passo 1", "Livello di maturità e profilo strategico",
      ["mat_intro", "mat_dettaglio", "profilo_intro", "profilo_calcolato", "profilo_dettaglio"]),
     ("Passo 2", "Risultato dei percorsi identificati", ["passo2"]),
-    ("Passo 3", "Analisi incrociata", ["passo3"]),
-    ("Passo 4", "Elaborazione finale su misura", ["passo4"]),
+    ("Passo 3", "Il piano d'azione", ["passo3"]),
 ]
 
 
-def genera_pdf(c: dict) -> bytes:
+def _componi(c: dict, voci_indice=None, pagine_indice=0):
+    """Costruisce il documento. Se voci_indice è fornito, inserisce l'indice
+    dopo la copertina usando quelle voci."""
     pdf = H2ReadyPDF()
+    pdf.voci_indice = []
     _pdf_copertina(pdf, c["comune"], c["livello"], c["profilo"] or "n.d.")
+
+    if voci_indice is not None:
+        pdf.add_page()
+        _scrivi_indice(pdf, voci_indice, pagine_indice)
+
     pdf.add_page(); scrivi_markdown_pdf(pdf, c["intro"])
     pdf.add_page(); scrivi_markdown_pdf(pdf, c["struttura"])
 
     for occhiello, titolo, chiavi in PASSI:
         sotto = f"Comune di {c['comune']}" if occhiello == "Passo 1" else ""
         _pdf_divisoria(pdf, occhiello, titolo, sotto)
+        pdf.voci_indice.append((0, f"{occhiello} — {titolo}", pdf.page_no()))
         pdf.add_page()
         for k, chiave in enumerate(chiavi):
             testo = c.get(chiave, "")
@@ -480,7 +559,23 @@ def genera_pdf(c: dict) -> bytes:
             if k:
                 pdf.ln(4)
             scrivi_markdown_pdf(pdf, testo)
-    return bytes(pdf.output())
+    return pdf
+
+
+def genera_pdf(c: dict) -> bytes:
+    """Il documento si compone due volte.
+
+    La prima serve solo a sapere in quale pagina finisce ciascun titolo; la
+    seconda inserisce l'indice e ricalcola i numeri tenendo conto delle pagine
+    che l'indice stesso occupa. Non esiste modo di saperlo in una passata sola,
+    perché la lunghezza dell'indice dipende dal numero di titoli.
+    """
+    prima = _componi(c)
+    voci = prima.voci_indice
+    # una pagina di indice ogni 40 voci circa, con un minimo di una
+    pagine_indice = max(1, -(-len(voci) // 40))
+    return bytes(_componi(c, voci, pagine_indice).output())
+
 
 # =============================================================================
 # WORD

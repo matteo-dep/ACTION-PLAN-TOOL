@@ -2550,164 +2550,526 @@ def commento_percorso(riga, codice: str) -> str:
     return ""
 
 
-def testo_passo3(riga, livello, profilo) -> str:
-    dedicato = f"5-incrocio_{livello}_{profilo}_it.md"
+
+# =============================================================================
+# PASSO 3 - IL PIANO D'AZIONE
+# Struttura richiesta dall'Application Form del progetto (WP 2.3):
+#   1. valutazione delle infrastrutture attuali e delle lacune
+#   2. cronoprogramma con traguardi intermedi
+#   3. attività specifiche di competenza comunale
+#   4. sostenibilità economica e impatto climatico
+# =============================================================================
+
+TESTO_PIANO_INTRO = """## Il piano d'azione
+
+Le sezioni precedenti hanno risposto a tre domande: chi consuma, chi può produrre,
+chi transita. Questa risponde alla quarta, che è l'unica che riguarda direttamente
+l'amministrazione: che cosa fare, in che ordine e con quali risorse.
+
+Il piano che segue è articolato secondo i quattro elementi che il progetto H2READY
+richiede a ciascun Action Plan comunale: la ricognizione delle infrastrutture
+esistenti e delle lacune da colmare, il cronoprogramma con i traguardi intermedi,
+le attività specifiche di competenza comunale e la valutazione di sostenibilità
+economica e climatica.
+
+Non è un elenco di intenti. Ogni azione discende da un dato rilevato nelle sezioni
+precedenti, e dove il dato manca l'azione è la sua raccolta.
+"""
+
+
+def _stato_infrastrutture(riga):
+    """Ricognizione delle infrastrutture esistenti, per ambito."""
+    voci = []
+
+    # produzione
+    fer = numero(riga.get("T25_FER_INSTALLATA_MW"))
+    progr = numero(riga.get("T25_PROGRAMMABILI_MW"))
+    if fer:
+        testo = f"{formatta_numero(fer)} MW di rinnovabili in esercizio"
+        if progr:
+            testo += (f", di cui {formatta_numero(progr)} MW programmabili, "
+                      "utilizzabili anche nelle ore senza sole")
+        voci.append(("Generazione rinnovabile", testo, "presente"))
+    else:
+        voci.append(("Generazione rinnovabile",
+                     "nessun impianto rilevante censito sul territorio", "lacuna"))
+
+    # rete
+    cap = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
+    dist = numero(riga.get("T25_DISTANZA_CABINA_PRIMARIA_KM"))
+    if cap is not None:
+        testo = f"{formatta_numero(cap)} MW di capacità residua"
+        if dist is not None:
+            testo += f", a {formatta_numero(dist)} km dalla cabina primaria"
+        stato = "presente" if cap >= 1 else "lacuna"
+        voci.append(("Rete elettrica", testo, stato))
+    else:
+        voci.append(("Rete elettrica",
+                     "capacità residua non verificata con il distributore", "lacuna"))
+
+    # produzione di idrogeno
+    prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
+    if prod:
+        voci.append(("Produzione di idrogeno",
+                     f"nessun impianto esistente; il percorso B ne ipotizza uno da "
+                     f"{formatta_numero(prod)} t/anno", "da realizzare"))
+    else:
+        voci.append(("Produzione di idrogeno",
+                     "nessun impianto esistente né dimensionato", "lacuna"))
+
+    # rifornimento
+    hrs = numero(riga.get("T28_CAPACITA_KG_GIORNO"))
+    if hrs:
+        voci.append(("Stazione di rifornimento",
+                     f"nessuna stazione esistente; il percorso C ne dimensiona una da "
+                     f"{formatta_numero(hrs)} kg/giorno", "da realizzare"))
+    else:
+        voci.append(("Stazione di rifornimento",
+                     "nessuna stazione esistente né dimensionata", "lacuna"))
+
+    # stoccaggio e trasporto
+    snam = numero(riga.get("T27_DISTANZA_SNAM_KM"))
+    if snam is not None:
+        stato = "presente" if snam <= 10 else "lacuna"
+        voci.append(("Trasporto della molecola",
+                     f"dorsale di trasporto a {formatta_numero(snam)} km; "
+                     + ("distanza compatibile con un allacciamento futuro"
+                        if snam <= 10 else
+                        "distanza che rende improbabile un collegamento diretto nel "
+                        "breve periodo"), stato))
+
+    # aree
+    area = numero(riga.get("T28_AREA_MINIMA_MQ"))
+    if area and not vero(riga.get("T27_FLAG_AREE_700BAR")):
+        voci.append(("Aree urbanisticamente compatibili",
+                     f"servono almeno {formatta_numero(area)} m² per la stazione, ma il "
+                     "piano regolatore non individua aree idonee allo stoccaggio ad alta "
+                     "pressione", "lacuna"))
+
+    # competenze e strumenti
+    if vero(riga.get("T12_FLAG_PIANIFICAZIONE")):
+        voci.append(("Strumenti di pianificazione",
+                     "l'idrogeno è già richiamato negli strumenti dell'ente", "presente"))
+    else:
+        voci.append(("Strumenti di pianificazione",
+                     "l'idrogeno non compare negli strumenti di pianificazione "
+                     "energetica dell'ente", "lacuna"))
+
+    return voci
+
+
+def testo_piano(riga, livello, profilo) -> str:
+    """Passo 3: il piano d'azione nei quattro elementi richiesti."""
+    dedicato = f"6-piano_{livello}_{profilo}_it.md"
     if os.path.exists(dedicato):
         return leggi_md(dedicato)
 
-    out = ["# Analisi incrociata",
-           "Il confronto fra i risultati dei tre percorsi verifica la coerenza interna "
-           "dello scenario e individua i punti su cui concentrare le decisioni.", ""]
+    out = [testo_da_template("6-piano_intro_it.md", {}, TESTO_PIANO_INTRO), ""]
+    out += [_sezione_infrastrutture(riga), ""]
+    out += [_sezione_cronoprogramma(riga, livello, profilo), ""]
+    out += [_sezione_attivita(riga, profilo), ""]
+    out += [_sezione_sostenibilita(riga), ""]
+    return "\n".join(p for p in out if p).strip()
 
-    domanda = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_H2_TON_ANNO"])
-    offerta = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
-    hrs_kg = numero(riga.get("T28_CAPACITA_KG_GIORNO"))
-    hrs_t = hrs_kg * 365 / 1000 if hrs_kg else None
 
-    if domanda is not None or offerta is not None:
-        out.append("## Bilancio fra domanda e offerta")
-        out += ["| Voce | Valore |", "| --- | --- |"]
-        if domanda is not None:
-            out.append(f"| Domanda complessiva stimata | {formatta_numero(domanda)} t/anno |")
-        if offerta is not None:
-            out.append(f"| Produzione locale potenziale | {formatta_numero(offerta)} t/anno |")
-        if hrs_t is not None:
-            out.append(f"| Capacità della stazione di rifornimento | {formatta_numero(hrs_t)} t/anno |")
-        if domanda and offerta:
-            out.append(f"| Saldo | {formatta_numero(offerta - domanda)} t/anno |")
-            out.append(f"| Copertura della domanda | {formatta_numero(offerta / domanda * 100)}% |")
+def _sezione_infrastrutture(riga) -> str:
+    """Elemento 1: stato delle infrastrutture e lacune da colmare."""
+    voci = _stato_infrastrutture(riga)
+    out = ["### Stato delle infrastrutture e lacune da colmare", "",
+           "La ricognizione distingue ciò che esiste da ciò che manca. È la base del "
+           "cronoprogramma: le lacune diventano azioni, nell'ordine in cui si "
+           "condizionano l'una con l'altra.", ""]
+    out += ["| Ambito | Situazione rilevata | Stato |", "| --- | --- | --- |"]
+    etichette = {"presente": "Presente", "lacuna": "Lacuna",
+                 "da realizzare": "Da realizzare"}
+    for ambito, testo, stato in voci:
+        out.append(f"| {ambito} | {testo} | {etichettatura(etichette[stato])} |")
+    out.append("")
+
+    lacune = [a for a, _, s in voci if s == "lacuna"]
+    if lacune:
+        out.append(f"Le lacune riguardano {len(lacune)} ambiti su {len(voci)}: "
+                   + ", ".join(l.lower() for l in lacune) + ".")
         out.append("")
-
-        if domanda and offerta:
-            cop = offerta / domanda * 100
-            if cop >= 110:
-                out.append("La produzione potenziale **eccede la domanda locale**. Il surplus "
-                           "può alimentare utenze di Comuni limitrofi o il traffico di "
-                           "transito, ma prima di dimensionare l'impianto sul massimo teorico "
-                           "occorre verificare l'esistenza di contratti di acquisto.")
-            elif cop >= 80:
-                out.append("Domanda e produzione potenziale sono **sostanzialmente in "
-                           "equilibrio**: è la condizione più favorevole per un progetto "
-                           "autoconsistente su scala comunale.")
-            else:
-                out.append("La produzione locale **non copre la domanda stimata**. Vanno "
-                           "valutate l'estensione del bacino di approvvigionamento, "
-                           "l'aggregazione con Comuni vicini o una fornitura esterna nella "
-                           "prima fase.")
-            out.append("")
-
-    lcoh = numero(riga.get("T26_LCOH_EURO_KG"))
-    breakeven = numero(riga.get("T28_BREAK_EVEN_EURO_KG"))
-    if lcoh is not None and breakeven is not None:
-        out.append("## Coerenza economica della filiera")
-        out += ["| Voce | Valore |", "| --- | --- |",
-                f"| Costo di produzione (LCOH) | Euro {formatta_numero(lcoh)}/kg |",
-                f"| Prezzo di pareggio alla pompa | Euro {formatta_numero(breakeven)}/kg |",
-                f"| Margine lordo teorico | Euro {formatta_numero(breakeven - lcoh)}/kg |", ""]
-        if breakeven > lcoh:
-            out.append("Il prezzo di pareggio della stazione resta sopra il costo di "
-                       "produzione: la filiera locale regge sul piano economico, a "
-                       "condizione che i volumi previsti si realizzino.")
-        else:
-            out.append("Il costo di produzione supera il prezzo di pareggio: senza "
-                       "contributo in conto capitale o senza un aumento dei volumi la "
-                       "configurazione non è sostenibile.")
+        if "Rete elettrica" in lacune:
+            out.append("Fra queste, la verifica della capacità di rete va affrontata per "
+                       "prima: è l'unica che può rendere irrealizzabile l'intero progetto "
+                       "e non dipende da risorse dell'ente, ma dai tempi del distributore. "
+                       "Richiederla costa una lettera.")
+        elif "Strumenti di pianificazione" in lacune:
+            out.append("Fra queste, l'inserimento dell'idrogeno negli strumenti di "
+                       "pianificazione è la sola che non richieda risorse economiche e che "
+                       "condizioni tutte le altre: senza, ogni intervento successivo passa "
+                       "da una variante.")
         out.append("")
-
-    vincoli = []
-    contestato = contestazioni(riga)
-    if contestato:
-        vincoli.append(f"Sul territorio risultano contestazioni riferite a: "
-                       f"{contestato}. Il percorso partecipativo va avviato prima "
-                       "della progettazione, non dopo.")
-    cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
-    taglia = numero(riga.get("T26_TAGLIA_ELETTROLIZZATORE_MW"))
-    if cap_rete is not None and taglia is not None and taglia > cap_rete:
-        vincoli.append(f"La taglia dell'elettrolizzatore ({formatta_numero(taglia)} MW) supera "
-                       f"la capacità residua di rete ({formatta_numero(cap_rete)} MW): serve un "
-                       "confronto preventivo con il distributore.")
-    sau = numero(riga.get("T25_SAU_OCCUPATA_PERC"))
-    if sau is not None and sau > 10:
-        vincoli.append(f"La superficie agricola già occupata da impianti "
-                       f"({formatta_numero(sau)}%) suggerisce di privilegiare coperture e aree "
-                       "dismesse rispetto al fotovoltaico a terra.")
-    if vincoli:
-        out.append("## Vincoli e attenzioni")
-        out += [f"- {v}" for v in vincoli] + [""]
-
-    gov = [(etichetta(c), formatta(riga[c], c)) for c in FLAG_GOVERNANCE
-           if c in riga.index and formatta(riga[c], c)]
-    if gov:
-        out.append("## Contesto di governance")
-        out += ["| Elemento | Stato |", "| --- | --- |"]
-        out += [f"| {e} | {v} |" for e, v in gov] + [""]
-
-    priorita = {
-        "L1": "consolidare le basi conoscitive e amministrative prima di impegnare capitale",
-        "L2": "trasformare gli studi disponibili in progetti cantierabili e finanziabili",
-        "L3": "passare alla realizzazione e all'aggregazione della domanda su scala sovracomunale",
-    }
-    out += ["## Lettura d'insieme",
-            f"Con un livello di maturità **{livello}** e un profilo "
-            f"**{profilo or 'non determinato'}**, la priorità operativa è "
-            f"{priorita.get(livello, priorita['L1'])}."]
     return "\n".join(out)
 
 
-def testo_passo4(riga, livello, profilo) -> str:
-    dedicato = f"6-finale_{livello}_{profilo}_it.md"
-    if os.path.exists(dedicato):
-        return leggi_md(dedicato)
+def etichettatura(testo):
+    """Le celle non interpretano il grassetto: si restituisce il testo semplice."""
+    return testo
 
-    base = {
-        "L1": [("0-6 mesi", "Nomina di un referente interno per la transizione energetica"),
-               ("6-12 mesi", "Completamento del bilancio energetico comunale"),
-               ("12-24 mesi", "Inserimento dell'idrogeno negli strumenti di pianificazione"),
-               ("24-36 mesi", "Studio di prefattibilità sul primo caso d'uso")],
-        "L2": [("0-6 mesi", "Selezione del caso d'uso prioritario e perimetro tecnico"),
-               ("6-12 mesi", "Studio di fattibilità tecnico-economica"),
-               ("12-24 mesi", "Individuazione dell'area e avvio dell'iter autorizzativo"),
-               ("24-36 mesi", "Candidatura a bandi regionali, nazionali o europei")],
-        "L3": [("0-6 mesi", "Definizione del modello di business e della governance"),
-               ("6-12 mesi", "Progettazione definitiva e chiusura del piano finanziario"),
-               ("12-24 mesi", "Gara e affidamento, anche in forma aggregata"),
-               ("24-36 mesi", "Realizzazione, messa in esercizio e monitoraggio")],
+
+
+def _sezione_cronoprogramma(riga, livello, profilo) -> str:
+    """Elemento 2: cronoprogramma con traguardi intermedi, per fase della filiera."""
+    out = ["### Cronoprogramma di sviluppo", "",
+           "Le fasi seguono l'ordine in cui si condizionano: non si dimensiona un "
+           "impianto senza conoscere la capacità di rete, non si autorizza senza aree "
+           "individuate, non si costruisce senza contratti di acquisto. Ogni traguardo "
+           "è la condizione del successivo.", ""]
+
+    # orizzonti derivati dai dati, se ci sono
+    avvio_flotta = numero(riga.get("T22_ANNO_AVVIO"))
+    completa_flotta = numero(riga.get("T22_ANNO_FLOTTA_CONVERTITA"))
+    orizzonte_hrs = riga.get("T28_ORIZZONTE")
+
+    fasi = {
+        "L1": [
+            ("0-6 mesi", "Impostazione",
+             "Nomina del referente interno per la transizione energetica e richiesta "
+             "formale al distributore della capacità residua di rete."),
+            ("6-12 mesi", "Conoscenza",
+             "Completamento del bilancio energetico comunale e del catasto delle flotte, "
+             "con le percorrenze reali dei mezzi."),
+            ("12-24 mesi", "Pianificazione",
+             "Inserimento dell'idrogeno negli strumenti di pianificazione energetica e "
+             "individuazione preliminare delle aree idonee."),
+            ("24-36 mesi", "Prefattibilità",
+             "Studio di prefattibilità sul primo caso d'uso e verifica dell'interesse "
+             "degli utilizzatori individuati."),
+        ],
+        "L2": [
+            ("0-6 mesi", "Selezione",
+             "Scelta del caso d'uso prioritario e definizione del perimetro tecnico, "
+             "con verifica della capacità di rete disponibile."),
+            ("6-12 mesi", "Fattibilità",
+             "Studio di fattibilità tecnico-economica con analisi degli investimenti e "
+             "dei costi di esercizio, e prima manifestazione di interesse degli "
+             "utilizzatori."),
+            ("12-24 mesi", "Autorizzazioni",
+             "Individuazione dell'area, variante urbanistica se necessaria e avvio "
+             "dell'iter autorizzativo."),
+            ("24-36 mesi", "Finanziamento",
+             "Candidatura a bandi regionali, nazionali o europei, con i contratti di "
+             "acquisto preliminari come allegato."),
+        ],
+        "L3": [
+            ("0-6 mesi", "Governance",
+             "Definizione del modello di business, della forma societaria e degli "
+             "impegni reciproci fra i soggetti coinvolti."),
+            ("6-12 mesi", "Progettazione",
+             "Progettazione definitiva, chiusura del piano finanziario e sottoscrizione "
+             "dei contratti di acquisto pluriennali."),
+            ("12-24 mesi", "Affidamento",
+             "Gara e affidamento, anche in forma aggregata con i Comuni limitrofi."),
+            ("24-36 mesi", "Realizzazione",
+             "Costruzione, messa in esercizio e avvio del monitoraggio delle prestazioni."),
+        ],
     }
-    specifiche = {
-        "A": "Aggregare la domanda dei soggetti individuati in un contratto di acquisto "
-             "pluriennale, condizione per rendere bancabile qualunque impianto.",
-        "B": "Mettere in sicurezza la disponibilità delle aree e la connessione di rete "
-             "prima di procedere con la progettazione dell'elettrolizzatore.",
-        "C": "Verificare con il gestore stradale e con gli operatori del trasporto pesante "
-             "i volumi effettivamente intercettabili dalla stazione di rifornimento.",
-    }
+    out += ["| Orizzonte | Fase | Traguardo |", "| --- | --- | --- |"]
+    for orizzonte, fase, azione in fasi.get(livello, fasi["L1"]):
+        out.append(f"| {orizzonte} | {fase} | {azione} |")
+    out.append("")
 
-    out = ["# Roadmap operativa su misura",
-           f"Percorso proposto per il Comune di **{riga[COL_NOME]}** "
-           f"(livello {livello}, profilo {profilo or 'n.d.'}).", "",
-           "## Cronoprogramma indicativo",
-           "| Orizzonte | Azione |", "| --- | --- |"]
-    out += [f"| {t} | {a} |" for t, a in base.get(livello, base["L1"])] + [""]
+    # --- sviluppo per segmento della filiera
+    segmenti = []
+    prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
+    if prod and "B" in (profilo or ""):
+        segmenti.append(("Approvvigionamento",
+                         f"Realizzazione dell'impianto di produzione da "
+                         f"{formatta_numero(prod)} t/anno. È il segmento con i tempi "
+                         "autorizzativi più lunghi e va avviato per primo, anche se "
+                         "entrerà in esercizio per ultimo."))
+    elif "A" in (profilo or "") or "C" in (profilo or ""):
+        segmenti.append(("Approvvigionamento",
+                         "In assenza di produzione locale, l'idrogeno va acquistato da "
+                         "fornitori esterni. Il primo passo è una manifestazione di "
+                         "interesse sul mercato, per conoscere prezzi e condizioni reali "
+                         "invece di stimarli."))
 
-    if profilo:
-        out.append("## Azioni specifiche del profilo")
-        out += [f"- **Vocazione {l}**: {specifiche[l]}" for l in profilo if l in specifiche]
+    hrs = numero(riga.get("T28_CAPACITA_KG_GIORNO"))
+    if hrs:
+        segmenti.append(("Distribuzione",
+                         f"Stazione di rifornimento da {formatta_numero(hrs)} kg/giorno"
+                         + (f", riferita all'orizzonte {str(orizzonte_hrs).strip()}"
+                            if not is_vuoto(orizzonte_hrs)
+                            and str(orizzonte_hrs).strip().lower() != "attuale" else "")
+                         + ". Va realizzata prima dei mezzi che deve servire: un veicolo "
+                         "senza rifornimento resta fermo, una stazione senza veicoli "
+                         "resta sottoutilizzata ma funziona."))
+
+    stocc = numero(riga.get("T28_AREA_MINIMA_MQ"))
+    if stocc:
+        segmenti.append(("Stoccaggio",
+                         f"Lo stoccaggio è parte della stazione e ne determina l'ingombro: "
+                         f"il lotto deve misurare almeno {formatta_numero(stocc)} m². "
+                         "L'individuazione dell'area è il primo atto di competenza "
+                         "esclusivamente comunale dell'intera filiera."))
+
+    if avvio_flotta and completa_flotta:
+        segmenti.append(("Utilizzo finale",
+                         f"Conversione della flotta comunale a partire dal "
+                         f"{formatta_numero(avvio_flotta)}, seguendo il fine vita dei "
+                         f"mezzi, con completamento previsto entro il "
+                         f"{formatta_numero(completa_flotta)}. La sostituzione anticipata "
+                         "di mezzi ancora efficienti non è né economica né sostenibile."))
+    else:
+        flotta = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
+        if flotta:
+            segmenti.append(("Utilizzo finale",
+                             f"Conversione progressiva della flotta comunale, per un "
+                             f"fabbisogno a regime di {formatta_numero(flotta)} t/anno. "
+                             "Il ritmo va allineato al fine vita dei mezzi."))
+
+    if segmenti:
+        out.append("#### Sviluppo per segmento della filiera")
+        for nome, testo in segmenti:
+            out.append(f"**{nome}.** {testo}")
+            out.append("")
+
+    return "\n".join(out)
+
+
+def _sezione_attivita(riga, profilo) -> str:
+    """Elemento 3: attività specifiche di competenza comunale."""
+    out = ["### Attività di competenza comunale", "",
+           "Molto di ciò che precede dipende da soggetti terzi: distributori, imprese, "
+           "operatori del trasporto. Le attività che seguono no: sono interamente nella "
+           "disponibilità dell'amministrazione, e per questo sono quelle da cui "
+           "conviene cominciare.", ""]
+
+    attivita = []
+
+    # trasporto scolastico
+    speciali = numero(riga.get("T23_N_MEZZI_SPECIALI"))
+    convertibili = numero(riga.get("T23_MEZZI_FUEL_CELL"))
+    flotta_h2 = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
+    if convertibili or flotta_h2:
+        dettaglio = ""
+        if convertibili:
+            dettaglio = (f" Dal censimento risultano {formatta_numero(convertibili)} mezzi "
+                         "tecnicamente convertibili"
+                         + (f" su {formatta_numero(speciali)} censiti." if speciali else "."))
+        attivita.append((
+            "Trasporto scolastico e servizi di linea",
+            "È il primo caso d'uso da valutare per tre ragioni che nessun altro impiego "
+            "riunisce: i mezzi rientrano ogni sera in un deposito comunale, quindi il "
+            "rifornimento può avvenire in un punto solo e in orario notturno; le "
+            "percorrenze sono note e ripetitive, quindi il fabbisogno è prevedibile; e "
+            "l'amministrazione decide da sola, senza dover convincere nessuno." + dettaglio
+            + " La sostituzione va programmata sul fine vita dei mezzi, non anticipata: "
+            "rottamare uno scuolabus efficiente per accelerare la transizione produce più "
+            "emissioni di quante ne eviti."))
+
+    # edifici pubblici
+    termico = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
+    if termico:
+        ottimale = riga.get("T24_SOLUZIONE_OTTIMALE")
+        testo = (f"Il patrimonio edilizio comunale richiede {formatta_numero(termico)} "
+                 "kWh termici all'anno. Il Tool 2.4 ha però mostrato che per scuole, "
+                 "uffici e palestre l'idrogeno consuma diverse volte l'energia di una "
+                 "pompa di calore a parità di calore prodotto: l'intervento sugli edifici "
+                 "resta nel piano, ma come **elettrificazione**, non come conversione a "
+                 "idrogeno.")
+        if not is_vuoto(ottimale):
+            testo += f" La soluzione individuata come ottimale è: {str(ottimale).strip()}."
+        testo += (" È una precisazione che vale la pena mettere per iscritto, perché è la "
+                  "richiesta che più spesso arriva agli uffici tecnici e che più spesso "
+                  "va respinta con una motivazione tecnica.")
+        attivita.append(("Edifici pubblici ad alto fabbisogno", testo))
+
+    # usi di nicchia attivi
+    nicchie_attive = [DETTAGLIO_NICCHIE[c]["titolo"] for c in DETTAGLIO_NICCHIE
+                      if c in riga.index and vero(riga[c])]
+    if nicchie_attive:
+        attivita.append((
+            "Impieghi dimostrativi",
+            "Il territorio presenta impieghi in cui l'idrogeno compete su requisiti "
+            "diversi dal costo: " + ", ".join(n.lower() for n in nicchie_attive) + ". "
+            "Sono volumi contenuti ma ad alta visibilità, e servono a costruire le "
+            "competenze tecniche dell'ente prima di affrontare investimenti maggiori. "
+            "Un mezzo comunale a idrogeno che opera davanti ai cittadini vale, per la "
+            "comprensione pubblica della tecnologia, più di qualunque campagna."))
+
+    # aree e urbanistica
+    if not vero(riga.get("T27_FLAG_PUMS")) and not is_vuoto(riga.get("T27_FLAG_PUMS")):
+        attivita.append((
+            "Adeguamento degli strumenti urbanistici",
+            "Individuare nelle previsioni di piano le aree compatibili con lo stoccaggio "
+            "e il rifornimento di idrogeno. Non comporta spesa, non impegna "
+            "l'amministrazione a realizzare nulla, e accorcia di anni l'iter di qualunque "
+            "progetto futuro, anche di iniziativa privata. È l'azione con il miglior "
+            "rapporto fra costo ed effetto dell'intero piano."))
+
+    # aggregazione
+    if vero(riga.get("T12_FLAG_JOINT_PROCUREMENT")) or vero(riga.get("T23_FLAG_HYDROGEN_VALLEY")):
+        attivita.append((
+            "Aggregazione della domanda",
+            "Il Comune ha già dichiarato disponibilità ad appalti congiunti o partecipa a "
+            "un progetto di Hydrogen Valley. È la leva che trasforma una domanda "
+            "insufficiente in una domanda finanziabile: nessun singolo Comune di medie "
+            "dimensioni raggiunge da solo la scala che rende sostenibile un impianto, e "
+            "quasi tutti la raggiungono insieme ai vicini."))
+
+    if not attivita:
+        out.append("Non emergono attività di competenza esclusivamente comunale: le "
+                   "informazioni raccolte non sono sufficienti a individuarle. È il "
+                   "segnale che i questionari sui consumi e sulle flotte vanno completati "
+                   "prima di procedere.")
+        return "\n".join(out)
+
+    for titolo, testo in attivita:
+        out.append(f"#### {titolo}")
+        out.append(testo)
+        out.append("")
+    return "\n".join(out)
+
+
+
+def _sezione_sostenibilita(riga) -> str:
+    """Elemento 4: sostenibilità economica e impatto climatico."""
+    out = ["### Sostenibilità economica e impatto climatico", ""]
+
+    capex_prod = numero(riga.get("T26_CAPEX_TOTALE_MLN"))
+    capex_hrs = numero(riga.get("T28_CAPEX_COMPLESSIVO_EURO"))
+    lcoh = numero(riga.get("T26_LCOH_EURO_KG"))
+    payback = numero(riga.get("T26_PAYBACK_ANNI"))
+    breakeven = numero(riga.get("T28_BREAK_EVEN_EURO_KG"))
+    delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
+
+    # --- investimento complessivo
+    voci_capex = []
+    totale = 0.0
+    if capex_prod:
+        voci_capex.append(("Impianto di produzione (percorso B)", capex_prod * 1e6))
+        totale += capex_prod * 1e6
+    if capex_hrs:
+        voci_capex.append(("Stazione di rifornimento (percorso C)", capex_hrs))
+        totale += capex_hrs
+    if delta_tco and delta_tco > 0:
+        voci_capex.append(("Differenziale sulla flotta (percorso A)", delta_tco))
+        totale += delta_tco
+
+    if voci_capex:
+        out.append("#### Investimento complessivo")
+        out += ["| Componente | Importo |", "| --- | --- |"]
+        out += [f"| {n} | Euro {formatta_numero(v)} |" for n, v in voci_capex]
+        if len(voci_capex) > 1:
+            out.append(f"| **Totale** | **Euro {formatta_numero(totale)}** |")
+        out.append("")
+        out.append("Gli importi non sono tutti a carico dell'amministrazione: la produzione "
+                   "e la stazione sono investimenti che nella maggior parte dei casi "
+                   "vengono realizzati da operatori privati o da società miste, con il "
+                   "Comune che conferisce aree, autorizzazioni e domanda garantita. Il "
+                   "differenziale sulla flotta è invece interamente pubblico, ed è la voce "
+                   "su cui si concentrano i contributi in conto capitale.")
         out.append("")
 
-    out += ["## Fattori abilitanti",
-            "- **Competenze**: formazione del personale tecnico nel programma H2READY.",
-            "- **Risorse**: capacità di cofinanziamento e ricorso alla finanza agevolata.",
-            "- **Partenariato**: utility, trasporto pubblico locale, imprese del territorio.",
-            "",
-            "## Indicatori di monitoraggio",
-            "| Indicatore | Unità |", "| --- | --- |",
-            "| Idrogeno consumato sul territorio | t/anno |",
-            "| Emissioni evitate | tCO2/anno |",
-            "| Quota rinnovabile dell'idrogeno impiegato | % |",
-            "| Investimento attivato | Euro |",
-            "",
-            "> Il presente Action Plan è un documento vivo: va aggiornato a ogni variazione "
-            "rilevante del quadro normativo, tecnologico o finanziario."]
+    # --- costi di esercizio e ritorno
+    righe = []
+    if lcoh is not None:
+        righe.append(f"| Costo di produzione dell'idrogeno | Euro {formatta_numero(lcoh)}/kg |")
+    if breakeven is not None:
+        righe.append(f"| Prezzo minimo alla pompa | Euro {formatta_numero(breakeven)}/kg |")
+    if payback is not None:
+        righe.append(f"| Tempo di ritorno dell'impianto di produzione | {formatta_numero(payback)} anni |")
+    if righe:
+        out.append("#### Ritorno dell'investimento")
+        out += ["| Indicatore | Valore |", "| --- | --- |"] + righe + [""]
+        if payback is not None:
+            if payback <= PAYBACK_ACCETTABILE_ANNI:
+                out.append(f"Un ritorno in {formatta_numero(payback)} anni rientra "
+                           "nell'orizzonte di un investimento infrastrutturale ordinario "
+                           "ed è compatibile con la durata delle concessioni e dei "
+                           "contratti di acquisto pluriennali.")
+            else:
+                out.append(f"Un ritorno in {formatta_numero(payback)} anni eccede "
+                           "l'orizzonte che un'amministrazione può assumere da sola. Non "
+                           "rende il progetto irrealizzabile, ma ne determina la forma: "
+                           "serve un partner industriale che porti capitale e gestione, "
+                           "oppure un contributo in conto capitale che riduca la quota da "
+                           "ammortizzare.")
+            out.append("")
+
+    # --- impatto climatico
+    co2_voci = []
+    co2_prod = numero(riga.get("T26_CO2_EVITATA_TON_ANNO"))
+    co2_flotta = numero(riga.get("T22_EMISSIONI_EVITATE_TCO2"))
+    co2_termico = numero(riga.get("T24_EMISSIONI_EVITATE_KGCO2_ANNO"))
+    if co2_flotta:
+        co2_voci.append(("Conversione della flotta", co2_flotta))
+    if co2_termico:
+        co2_voci.append(("Interventi sugli edifici pubblici", co2_termico / 1000))
+    if co2_prod:
+        co2_voci.append(("Produzione locale rinnovabile", co2_prod))
+
+    if co2_voci:
+        totale_co2 = sum(v for _, v in co2_voci)
+        out.append("#### Impatto sulle emissioni")
+        out += ["| Intervento | Emissioni evitate |", "| --- | --- |"]
+        out += [f"| {n} | {formatta_numero(v)} tCO2/anno |" for n, v in co2_voci]
+        if len(co2_voci) > 1:
+            out.append(f"| **Totale** | **{formatta_numero(totale_co2)} tCO2/anno** |")
+        out.append("")
+
+        # costo della tonnellata evitata: il metro con cui si confrontano le misure
+        if totale and totale_co2 > 0:
+            anni = 20
+            costo_ton = totale / (totale_co2 * anni)
+            out.append(f"Rapportando l'investimento complessivo alle emissioni evitate su "
+                       f"un orizzonte di {anni} anni, il costo della tonnellata di CO2 "
+                       f"evitata risulta di **Euro {formatta_numero(costo_ton)}**.")
+            out.append("")
+            if costo_ton <= 100:
+                out.append("È un valore che regge il confronto con qualunque altra misura "
+                           "di decarbonizzazione: sotto i cento euro a tonnellata "
+                           "l'intervento è efficiente in senso assoluto, non solo "
+                           "rispetto alle alternative a idrogeno.")
+            elif costo_ton <= 500:
+                out.append("È un valore nella media degli interventi su settori "
+                           "difficili da abbattere. Va confrontato con quanto costerebbe "
+                           "evitare la stessa CO2 con altre misure sul territorio: se "
+                           "l'efficienza energetica degli edifici o l'elettrificazione "
+                           "della mobilità leggera costano meno, quelle vanno fatte prima.")
+            else:
+                out.append("È un valore alto. Non significa che l'intervento sia sbagliato "
+                           "— i settori Hard-to-Abate costano di più proprio perché non "
+                           "hanno alternative — ma significa che va motivato con la "
+                           "necessità tecnica, non con l'efficienza climatica. Le stesse "
+                           "risorse impiegate altrove eviterebbero più emissioni.")
+            out.append("")
+            out.append("> Il calcolo rapporta l'intero investimento alle emissioni evitate "
+                       f"in {anni} anni di esercizio, senza attualizzazione e senza "
+                       "considerare i contributi pubblici: è un ordine di grandezza per "
+                       "confrontare misure alternative, non un indicatore finanziario.")
+            out.append("")
+
+    # --- coerenza con gli obiettivi climatici
+    out.append("#### Coerenza con gli obiettivi di lungo periodo")
+    obiettivi = ["La **Legge regionale 4/2023** fissa la neutralità climatica del Friuli "
+                 "Venezia Giulia al 2045: gli interventi di questo piano vanno "
+                 "programmati perché siano in esercizio, non in progetto, entro quella "
+                 "data."]
+    if vero(riga.get("T12_FLAG_NAHV")):
+        obiettivi.append("Il Comune aderisce alla **North Adriatic Hydrogen Valley**, che "
+                         "punta a 5.000 tonnellate annue di idrogeno rinnovabile su scala "
+                         "transfrontaliera: il fabbisogno locale rilevato va letto come "
+                         "quota di quel target, non come progetto isolato.")
+    if vero(riga.get("T23_FLAG_HYDROGEN_VALLEY")):
+        obiettivi.append("Sul territorio insiste già un progetto di Hydrogen Valley "
+                         "finanziato: le azioni di questo piano vanno coordinate con "
+                         "quelle, per evitare che due infrastrutture si contendano la "
+                         "stessa domanda.")
+    obiettivi.append("Il **PNIEC** assegna all'idrogeno rinnovabile un ruolo circoscritto "
+                     "ai settori senza alternative: la coerenza con quel quadro non si "
+                     "misura dalla quantità di idrogeno impiegata, ma dalla correttezza "
+                     "degli impieghi scelti.")
+    out += [f"- {o}" for o in obiettivi]
+    out.append("")
+    out.append("> Il presente Action Plan è un documento vivo: va aggiornato a ogni "
+               "variazione rilevante del quadro normativo, tecnologico o finanziario, e "
+               "riesaminato comunque prima di ogni candidatura a finanziamento.")
     return "\n".join(out)
 
 
@@ -2725,8 +3087,7 @@ def costruisci_contenuti(riga, livello, profilo, punteggi) -> dict:
         "profilo_calcolato": testo_profilo(profilo, punteggi),
         "profilo_dettaglio": leggi_md(profilo_file) if profilo else "",
         "passo2": testo_passo2(riga),
-        "passo3": testo_passo3(riga, livello, profilo),
-        "passo4": testo_passo4(riga, livello, profilo),
+        "passo3": testo_piano(riga, livello, profilo),
     }
 
 
