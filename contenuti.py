@@ -2668,6 +2668,7 @@ def testo_piano(riga, livello, profilo) -> str:
     out += [_sezione_infrastrutture(riga), ""]
     out += [_sezione_cronoprogramma(riga, livello, profilo), ""]
     out += [_sezione_attivita(riga, profilo), ""]
+    out += [_sezione_investimento(riga, livello), ""]
     out += [_sezione_sostenibilita(riga), ""]
     return "\n".join(p for p in out if p).strip()
 
@@ -2832,77 +2833,132 @@ def _sezione_cronoprogramma(riga, livello, profilo) -> str:
 
 
 def _sezione_attivita(riga, profilo) -> str:
-    """Elemento 3: attività specifiche di competenza comunale."""
+    """Elemento 3: attività specifiche di competenza comunale.
+
+    Ogni raccomandazione passa prima da una verifica di elettrificabilità: se la
+    batteria o la pompa di calore coprono il fabbisogno, l'idrogeno non va
+    raccomandato, e il piano deve dirlo invece di tacerlo.
+    """
     out = ["### Attività di competenza comunale", "",
            "Molto di ciò che precede dipende da soggetti terzi: distributori, imprese, "
            "operatori del trasporto. Le attività che seguono no: sono interamente nella "
-           "disponibilità dell'amministrazione, e per questo sono quelle da cui "
-           "conviene cominciare.", ""]
+           "disponibilità dell'amministrazione, e per questo sono quelle da cui conviene "
+           "cominciare.", "",
+           "Prima di elencarle va però ribadito il criterio che le governa. Un'attività "
+           "entra in questo piano **come intervento a idrogeno solo se l'elettrificazione "
+           "diretta non è praticabile**. Dove lo è, l'attività resta nel piano ma cambia "
+           "natura: diventa un intervento di elettrificazione, che il Comune deve "
+           "realizzare comunque e prima. Raccomandare idrogeno dove la batteria arriva "
+           "significa spendere di più per ottenere meno, e sottrarre energia rinnovabile "
+           "ai settori che non hanno alternative.", ""]
 
     attivita = []
+    bev = riga.get("T22_BEV_FATTIBILE")
+    esito = riga.get("T22_ESITO_PREVALENTE")
+    n_veicoli = numero(riga.get("T22_N_VEICOLI_ANALIZZATI"))
 
-    # trasporto scolastico
-    speciali = numero(riga.get("T23_N_MEZZI_SPECIALI"))
-    convertibili = numero(riga.get("T23_MEZZI_FUEL_CELL"))
-    flotta_h2 = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
-    if convertibili or flotta_h2:
-        dettaglio = ""
-        if convertibili:
-            dettaglio = (f" Dal censimento risultano {formatta_numero(convertibili)} mezzi "
-                         "tecnicamente convertibili"
-                         + (f" su {formatta_numero(speciali)} censiti." if speciali else "."))
-        attivita.append((
-            "Trasporto scolastico e servizi di linea",
-            "È il primo caso d'uso da valutare per tre ragioni che nessun altro impiego "
-            "riunisce: i mezzi rientrano ogni sera in un deposito comunale, quindi il "
-            "rifornimento può avvenire in un punto solo e in orario notturno; le "
-            "percorrenze sono note e ripetitive, quindi il fabbisogno è prevedibile; e "
-            "l'amministrazione decide da sola, senza dover convincere nessuno." + dettaglio
-            + " La sostituzione va programmata sul fine vita dei mezzi, non anticipata: "
-            "rottamare uno scuolabus efficiente per accelerare la transizione produce più "
-            "emissioni di quante ne eviti."))
+    # --- flotta comunale: la raccomandazione dipende dall'esito del Tool 2.2
+    if not is_vuoto(bev) or not is_vuoto(esito):
+        if vero(bev):
+            testo = (
+                "L'analisi del Tool 2.2 indica che per i mezzi comunali analizzati "
+                "**l'alternativa a batteria è praticabile**"
+                + (f" ({formatta_numero(n_veicoli)} veicoli esaminati)" if n_veicoli else "")
+                + ". Non è un esito negativo: è la conferma che il Comune può "
+                "decarbonizzare la propria flotta senza attendere alcuna infrastruttura a "
+                "idrogeno, con mezzi già disponibili sul mercato e a un costo di esercizio "
+                "inferiore.\n\n"
+                "Il trasporto scolastico ne è il caso più chiaro. Uno scuolabus percorre "
+                "fra gli ottanta e i cento chilometri al giorno, rientra ogni sera in "
+                "deposito e resta fermo tutta la notte: sono esattamente le condizioni in "
+                "cui la batteria dà il meglio, perché la ricarica lenta notturna costa "
+                "poco, non richiede colonnine ad alta potenza e non consuma il pacco. "
+                "Convertire quei mezzi a idrogeno costerebbe circa tre volte l'energia e "
+                "un investimento superiore, per un servizio identico.\n\n"
+                "**L'azione da inserire nel piano è quindi l'elettrificazione del "
+                "trasporto scolastico e dei servizi urbani**, con l'installazione di punti "
+                "di ricarica al deposito. L'idrogeno resta riservato ai mezzi che il Tool "
+                "2.2 ha indicato come non elettrificabili, se ce ne sono.")
+        else:
+            testo = (
+                "L'analisi del Tool 2.2 indica che per i mezzi comunali analizzati "
+                "**l'alternativa a batteria non è praticabile**"
+                + (f": {str(esito).strip().lower()}" if not is_vuoto(esito) else "")
+                + ". È la condizione che rende l'idrogeno una scelta fondata e non una "
+                "preferenza, e va documentata negli atti: sarà la motivazione tecnica da "
+                "allegare a qualunque richiesta di finanziamento.\n\n"
+                "La conversione va programmata sul fine vita dei mezzi, non anticipata. "
+                "Rottamare un veicolo ancora efficiente per accelerare la transizione "
+                "produce più emissioni di quante ne eviti, perché la costruzione del mezzo "
+                "sostitutivo pesa più dei consumi risparmiati nei pochi anni guadagnati.")
+        attivita.append(("Flotta comunale e trasporto scolastico", testo))
 
-    # edifici pubblici
+    # --- edifici pubblici
     termico = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
     if termico:
         ottimale = riga.get("T24_SOLUZIONE_OTTIMALE")
-        testo = (f"Il patrimonio edilizio comunale richiede {formatta_numero(termico)} "
-                 "kWh termici all'anno. Il Tool 2.4 ha però mostrato che per scuole, "
-                 "uffici e palestre l'idrogeno consuma diverse volte l'energia di una "
-                 "pompa di calore a parità di calore prodotto: l'intervento sugli edifici "
-                 "resta nel piano, ma come **elettrificazione**, non come conversione a "
-                 "idrogeno.")
-        if not is_vuoto(ottimale):
-            testo += f" La soluzione individuata come ottimale è: {str(ottimale).strip()}."
-        testo += (" È una precisazione che vale la pena mettere per iscritto, perché è la "
-                  "richiesta che più spesso arriva agli uffici tecnici e che più spesso "
-                  "va respinta con una motivazione tecnica.")
+        h2_ottimale = "idrogeno" in str(ottimale).strip().lower()
+        testo = (f"Il patrimonio edilizio comunale richiede {formatta_numero(termico)} kWh "
+                 "termici all'anno. ")
+        if h2_ottimale:
+            testo += ("Il Tool 2.4 individua l'idrogeno come soluzione ottimale: è un esito "
+                      "raro, che va verificato prima di trasformarlo in un'azione. Ricorre "
+                      "solo in presenza di condizioni particolari, come edifici vincolati "
+                      "in cui non è possibile intervenire sugli impianti di distribuzione.")
+        else:
+            testo += ("Il Tool 2.4 mostra però che per scuole, uffici e palestre l'idrogeno "
+                      "consuma diverse volte l'energia di una pompa di calore a parità di "
+                      "calore prodotto. **L'intervento sugli edifici resta nel piano, ma "
+                      "come elettrificazione**, non come conversione a idrogeno")
+            if not is_vuoto(ottimale):
+                testo += f": la soluzione individuata è {str(ottimale).strip().lower()}"
+            testo += (". È una precisazione che vale la pena mettere per iscritto, perché "
+                      "è la richiesta che più spesso arriva agli uffici tecnici e che più "
+                      "spesso va respinta con una motivazione tecnica.\n\n"
+                      "Va inoltre ricordato che prima di sostituire il generatore conviene "
+                      "ridurre il fabbisogno: l'intervento sull'involucro ha una vita "
+                      "utile doppia rispetto a quella di qualunque impianto e riduce la "
+                      "taglia della macchina da installare, qualunque essa sia.")
         attivita.append(("Edifici pubblici ad alto fabbisogno", testo))
 
-    # usi di nicchia attivi
+    # --- usi di nicchia: solo quelli non elettrificabili
     nicchie_attive = [DETTAGLIO_NICCHIE[c]["titolo"] for c in DETTAGLIO_NICCHIE
-                      if c in riga.index and vero(riga[c])]
+                      if c in riga.index and vero(riga[c])
+                      and c != "T23_FLAG_DEPURATORI"]
     if nicchie_attive:
         attivita.append((
             "Impieghi dimostrativi",
-            "Il territorio presenta impieghi in cui l'idrogeno compete su requisiti "
-            "diversi dal costo: " + ", ".join(n.lower() for n in nicchie_attive) + ". "
+            "Il territorio presenta impieghi in cui l'idrogeno compete su requisiti che "
+            "l'elettrificazione non soddisfa — continuità di servizio, assenza di rete, "
+            "tempi di rifornimento, prestazioni a basse temperature: "
+            + ", ".join(n.lower() for n in nicchie_attive) + ". "
             "Sono volumi contenuti ma ad alta visibilità, e servono a costruire le "
             "competenze tecniche dell'ente prima di affrontare investimenti maggiori. "
-            "Un mezzo comunale a idrogeno che opera davanti ai cittadini vale, per la "
-            "comprensione pubblica della tecnologia, più di qualunque campagna."))
+            "Anche qui la verifica va rifatta caso per caso al momento della "
+            "progettazione: le prestazioni delle batterie migliorano, e un impiego che "
+            "oggi non è elettrificabile potrebbe esserlo fra cinque anni."))
 
-    # aree e urbanistica
+    if vero(riga.get("T23_FLAG_DEPURATORI")):
+        attivita.append((
+            "Depuratore come sito di produzione",
+            "Il depuratore comunale non è un consumatore di idrogeno ma un possibile sito "
+            "di produzione, ed è l'unico impianto di proprietà pubblica che offra "
+            "simultaneamente acqua di processo, un utilizzo diretto dell'ossigeno prodotto "
+            "dall'elettrolisi e un impiego per il calore di scarto. È l'attività con il "
+            "maggior contenuto di innovazione fra quelle qui elencate, e merita uno studio "
+            "di fattibilità dedicato prima di essere inserita in un programma di spesa."))
+
+    # --- urbanistica
     if not vero(riga.get("T27_FLAG_PUMS")) and not is_vuoto(riga.get("T27_FLAG_PUMS")):
         attivita.append((
             "Adeguamento degli strumenti urbanistici",
-            "Individuare nelle previsioni di piano le aree compatibili con lo stoccaggio "
-            "e il rifornimento di idrogeno. Non comporta spesa, non impegna "
+            "Individuare nelle previsioni di piano le aree compatibili con lo stoccaggio e "
+            "il rifornimento di idrogeno. Non comporta spesa, non impegna "
             "l'amministrazione a realizzare nulla, e accorcia di anni l'iter di qualunque "
             "progetto futuro, anche di iniziativa privata. È l'azione con il miglior "
             "rapporto fra costo ed effetto dell'intero piano."))
 
-    # aggregazione
+    # --- aggregazione
     if vero(riga.get("T12_FLAG_JOINT_PROCUREMENT")) or vero(riga.get("T23_FLAG_HYDROGEN_VALLEY")):
         attivita.append((
             "Aggregazione della domanda",
@@ -2914,9 +2970,9 @@ def _sezione_attivita(riga, profilo) -> str:
 
     if not attivita:
         out.append("Non emergono attività di competenza esclusivamente comunale: le "
-                   "informazioni raccolte non sono sufficienti a individuarle. È il "
-                   "segnale che i questionari sui consumi e sulle flotte vanno completati "
-                   "prima di procedere.")
+                   "informazioni raccolte non sono sufficienti a individuarle. È il segnale "
+                   "che i questionari sui consumi e sulle flotte vanno completati prima di "
+                   "procedere.")
         return "\n".join(out)
 
     for titolo, testo in attivita:
@@ -2925,6 +2981,141 @@ def _sezione_attivita(riga, profilo) -> str:
         out.append("")
     return "\n".join(out)
 
+
+
+# --- Strumenti di finanziamento noti al momento della stesura -----------------
+# Non sostituiscono la verifica dei bandi aperti: servono a indicare dove
+# cercare, con quale ordine di priorità e per quale componente.
+STRUMENTI_FINANZIAMENTO = [
+    ("Produzione",
+     "PNRR Hydrogen Valleys e successivi bandi nazionali sulla produzione di idrogeno "
+     "rinnovabile; FER X per la componente rinnovabile dell'impianto; Innovation Fund "
+     "europeo per le configurazioni di taglia industriale."),
+    ("Rifornimento",
+     "CEF Transport e AFIF (Alternative Fuels Infrastructure Facility) per le stazioni "
+     "sulla rete TEN-T; bandi PNRR dedicati alle stazioni di rifornimento a idrogeno."),
+    ("Flotte",
+     "Bandi regionali e nazionali per il rinnovo del trasporto pubblico locale, che "
+     "coprono in genere il differenziale rispetto al mezzo convenzionale; Conto Termico "
+     "e fondi per la mobilità sostenibile per i mezzi di servizio."),
+    ("Edifici e efficienza",
+     "Conto Termico 3.0 per gli interventi sull'involucro e sui generatori del patrimonio "
+     "pubblico; PREPAC per gli immobili della pubblica amministrazione centrale e i "
+     "programmi regionali collegati."),
+    ("Studi e progettazione",
+     "Fondi di assistenza tecnica regionali ed europei, spesso trascurati e invece "
+     "decisivi: coprono studi di fattibilità e progettazione, che sono la spesa che un "
+     "Comune fatica di più a mettere a bilancio."),
+]
+
+
+def _sezione_investimento(riga, livello) -> str:
+    """Piano finanziario: chi paga cosa, con quali strumenti e in quali anni."""
+    capex_prod = numero(riga.get("T26_CAPEX_TOTALE_MLN"))
+    capex_hrs = numero(riga.get("T28_CAPEX_COMPLESSIVO_EURO"))
+    delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
+    connessioni = numero(riga.get("T26_CAPEX_CONNESSIONI_EURO"))
+
+    out = ["### Piano di investimento", "",
+           "Gli importi delle sezioni precedenti sono costi di realizzazione, non impegni "
+           "di bilancio del Comune. Questa sezione li ripartisce per soggetto, indica gli "
+           "strumenti di finanziamento a cui ciascuna componente può accedere e li "
+           "colloca nel tempo.", ""]
+
+    # --- ripartizione per soggetto
+    componenti = []
+    if capex_prod:
+        componenti.append(("Impianto di produzione", capex_prod * 1e6,
+                           "Operatore privato o società mista",
+                           "Il Comune conferisce aree, autorizzazioni e domanda; "
+                           "l'investimento è di norma a carico di un partner industriale."))
+    if connessioni:
+        componenti.append(("Connessioni elettriche", connessioni,
+                           "Titolare dell'impianto",
+                           "Costo a carico di chi realizza l'impianto, ma soggetto ai "
+                           "tempi del distributore: va verificato prima di ogni impegno."))
+    if capex_hrs:
+        componenti.append(("Stazione di rifornimento", capex_hrs,
+                           "Operatore del settore carburanti",
+                           "Raramente realizzata direttamente da un Comune. Il ruolo "
+                           "dell'ente è mettere a disposizione l'area e garantire i tempi "
+                           "autorizzativi."))
+    if delta_tco and delta_tco > 0:
+        componenti.append(("Differenziale sulla flotta", delta_tco,
+                           "Comune",
+                           "È l'unica voce interamente pubblica, e quella su cui si "
+                           "concentrano i contributi in conto capitale."))
+
+    if componenti:
+        out.append("#### Ripartizione per soggetto")
+        out += ["| Componente | Importo | A carico di |", "| --- | --- | --- |"]
+        for nome, importo, soggetto, _ in componenti:
+            out.append(f"| {nome} | Euro {formatta_numero(importo)} | {soggetto} |")
+        out.append("")
+        quota_comune = sum(i for n, i, s, _ in componenti if s == "Comune")
+        totale = sum(i for _, i, _, _ in componenti)
+        if totale:
+            out.append(f"Sul totale di Euro {formatta_numero(totale)}, la quota "
+                       f"riconducibile direttamente al bilancio comunale è di Euro "
+                       f"{formatta_numero(quota_comune)}, pari al "
+                       f"{formatta_numero(quota_comune / totale * 100)}%. "
+                       "È il numero da portare in Consiglio: il resto misura la dimensione "
+                       "del progetto, non l'impegno dell'ente.")
+            out.append("")
+        for nome, _, _, nota in componenti:
+            out.append(f"**{nome}.** {nota}")
+            out.append("")
+
+    # --- strumenti di finanziamento
+    out.append("#### Strumenti di finanziamento")
+    out.append("L'elenco indica dove cercare, non quanto si otterrà: le dotazioni e le "
+               "aliquote cambiano a ogni edizione, e vanno verificate al momento della "
+               "candidatura.")
+    out.append("")
+    out += ["| Componente | Strumenti |", "| --- | --- |"]
+    out += [f"| {n} | {s} |" for n, s in STRUMENTI_FINANZIAMENTO]
+    out.append("")
+
+    if livello == "L1":
+        out.append("Al livello di maturità rilevato, la voce più utile della tabella è "
+                   "l'ultima. I fondi di assistenza tecnica coprono studi e progettazione, "
+                   "che sono la spesa che precede tutte le altre e quella che più spesso "
+                   "blocca i progetti prima ancora che comincino.")
+    else:
+        out.append("La sequenza consigliata è: prima i fondi per studi e progettazione, che "
+                   "producono i documenti richiesti dagli altri bandi; poi la candidatura "
+                   "sulle infrastrutture, allegando i contratti di acquisto come prova "
+                   "della domanda; infine i contributi sulle flotte, che vanno richiesti "
+                   "quando il rifornimento è certo e non prima.")
+    out.append("")
+
+    # --- scaglionamento
+    out.append("#### Scaglionamento della spesa")
+    out.append("La spesa non si concentra in un esercizio. La ripartizione indicativa che "
+               "segue serve alla programmazione di bilancio pluriennale, ed è la ragione "
+               "per cui il cronoprogramma va approvato prima e non dopo il piano "
+               "finanziario.")
+    out.append("")
+    fasi_spesa = [
+        ("Primo biennio", "Studi di fattibilità, progettazione preliminare, verifiche di "
+                          "rete e adeguamenti urbanistici. È la quota minore in valore ma "
+                          "quella che sblocca tutto il resto, e va coperta con risorse "
+                          "proprie o con fondi di assistenza tecnica."),
+        ("Secondo biennio", "Progettazione definitiva, iter autorizzativi e candidature ai "
+                            "bandi. La spesa resta contenuta, ma richiede continuità: un "
+                            "iter interrotto va quasi sempre ricominciato."),
+        ("Terzo biennio", "Realizzazione delle infrastrutture e primi acquisti di mezzi. È "
+                          "qui che si concentra la spesa, ed è qui che i contributi "
+                          "ottenuti nella fase precedente devono essere già acquisiti."),
+    ]
+    out += ["| Periodo | Contenuto |", "| --- | --- |"]
+    out += [f"| {p} | {t} |" for p, t in fasi_spesa]
+    out.append("")
+    out.append("> Gli importi per periodo non sono qui quantificati perché dipendono dalle "
+               "scelte progettuali e dall'esito delle candidature. La quantificazione è il "
+               "primo prodotto atteso dallo studio di fattibilità, e va inserita in questo "
+               "piano al suo aggiornamento.")
+    return "\n".join(out)
 
 
 def _sezione_sostenibilita(riga) -> str:
