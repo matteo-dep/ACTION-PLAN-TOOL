@@ -94,6 +94,26 @@ URL_OVERRIDE = {
     "2.6": "https://h2readytoolkitpathb-c-cznjvhg7jq6imzcih2rs7y.streamlit.app/",
 }
 
+# Questionari Tally in lingua slovena. Sono form DIVERSI da quelli italiani,
+# non la stessa pagina tradotta: hanno indirizzo proprio e domande proprie,
+# e lo smistatore li riconosce dal campo "ID projekta" (script v8).
+#
+# Le applicazioni Streamlit non stanno qui: quelle sono gia' trilingui, un solo
+# indirizzo per tutti, e la lingua viaggia nell'URL.
+#
+# Sta in questo modulo e non nel foglio LINK perche' cosi' il foglio resta una
+# riga per strumento: aggiungere una colonna per lingua avrebbe obbligato a
+# ritoccarlo a ogni lingua nuova, e a tenerlo allineato a mano.
+URL_LINGUA = {
+    "sl": {
+        "1.1": "https://tally.so/r/gDo25P",
+        "1.2": "https://tally.so/r/lbEQLN",
+        "2.3": "https://tally.so/r/PdqKle",
+        "2.5": "https://tally.so/r/44b5LY",
+        "2.7": "https://tally.so/r/QKQLdG",
+    },
+}
+
 # Compatibilità: i nomi tradotti si ottengono con nome_percorso("A")
 NOMI_PERCORSO = {"A": "Domanda e usi finali",
                  "B": "Offerta e produzione",
@@ -726,9 +746,24 @@ def url_con_contesto(url, id_istat, lingua=None) -> str:
     return f"{url}{separatore}{coda}"
 
 
-def url_tool(codice, url_foglio):
-    """URL effettivo di uno strumento: l'override vince sul foglio LINK."""
-    return URL_OVERRIDE.get(str(codice).strip(), url_foglio)
+def url_tool(codice, url_foglio, lingua=None):
+    """URL effettivo di uno strumento, nell'ordine in cui si decide.
+
+    1. versione nella lingua richiesta, se quello strumento ne ha una propria
+       (i questionari Tally sloveni sono form a se' stanti)
+    2. override di deploy
+    3. quello che sta nel foglio LINK
+
+    Una lingua senza versione propria ricade sul foglio: l'inglese non ha
+    questionari suoi, quindi un utente inglese apre i form italiani. E' voluto,
+    ma e' bene saperlo.
+    """
+    c = str(codice).strip()
+    lin = lingua or lingua_corrente()
+    per_lingua = URL_LINGUA.get(lin, {})
+    if c in per_lingua:
+        return per_lingua[c]
+    return URL_OVERRIDE.get(c, url_foglio)
 
 
 def mostra_prossimi_tool(riga, lingua=None, foglio="LINK", solo_mancanti=False):
