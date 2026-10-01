@@ -75,6 +75,25 @@ REGOLE_LIVELLO = {
 # Contatto mostrato quando uno strumento è accessibile solo su richiesta.
 CONTATTO_PROGETTO = "matteo.depiccoli@ape.fvg.it"
 
+# Pagina 1.3: è l'unico indirizzo che il Comune deve conservare, e il pulsante
+# "torna al menu" di ogni tool punta qui. Sta in questo modulo, non nei singoli
+# tool, così un cambio di deploy si propaga con una sola modifica copiata.
+URL_MENU = "https://h2readytoolkitpathb-c-pljosccpj7fltaxwwi6dd5.streamlit.app/"
+
+# Generatore di Action Plan: e' l'ultimo passo del percorso, non uno strumento
+# in piu'. Per questo non sta nel foglio LINK insieme agli altri ma ha un
+# blocco suo, mostrato in fondo a ogni tool e nella pagina 1.3.
+URL_ACTION_PLAN = "https://action-plan-tool-ot48zaauowyurony4i9k6o.streamlit.app/"
+
+# Ponte temporaneo: URL che hanno cambiato deploy dopo l'ultima revisione del
+# foglio LINK. Quello che sta qui ha la precedenza su quello che sta nel foglio.
+# Appena il foglio è aggiornato, la voce va tolta: due fonti di verità per lo
+# stesso dato sono esattamente il modo in cui ci si ritrova con un link morto
+# che nessuno sa più dove correggere.
+URL_OVERRIDE = {
+    "2.6": "https://h2readytoolkitpathb-c-cznjvhg7jq6imzcih2rs7y.streamlit.app/",
+}
+
 # Compatibilità: i nomi tradotti si ottengono con nome_percorso("A")
 NOMI_PERCORSO = {"A": "Domanda e usi finali",
                  "B": "Offerta e produzione",
@@ -242,6 +261,61 @@ TESTI = {
     "sch_nota": {"it": "Tutti i valori restano modificabili con i controlli sottostanti.",
                  "en": "All values remain editable with the controls below.",
                  "sl": "Vse vrednosti je mogoče spremeniti s spodnjimi kontrolniki."},
+
+    # --- blocco "prosegui così": tendina con i soli strumenti mancanti ---
+    "pros_titolo": {"it": "Prosegui così — {n} strumenti ancora da compilare",
+                    "en": "Continue in this way — {n} tools still to complete",
+                    "sl": "Nadaljujte tako — še {n} orodij za izpolniti"},
+    "pros_titolo_uno": {"it": "Prosegui così — manca un solo strumento",
+                        "en": "Continue in this way — one tool left",
+                        "sl": "Nadaljujte tako — manjka samo eno orodje"},
+    "pros_intro": {"it": "Questi sono gli strumenti che il tuo Comune non ha ancora "
+                         "compilato. L'Action Plan conteggia solo ciò che riceve: uno "
+                         "strumento saltato non è un errore, ma non entra nel documento.",
+                   "en": "These are the tools your municipality has not completed yet. "
+                         "The Action Plan only counts what it receives: a tool you skip "
+                         "is not an error, but it will not appear in the document.",
+                   "sl": "To so orodja, ki jih vaša občina še ni izpolnila. Akcijski načrt "
+                         "upošteva samo prejeto: izpuščeno orodje ni napaka, vendar se v "
+                         "dokumentu ne bo pojavilo."},
+    "pros_finito": {"it": "Hai compilato tutti gli strumenti disponibili per il tuo "
+                          "profilo. Puoi generare l'Action Plan.",
+                    "en": "You have completed every tool available for your profile. "
+                          "You can now generate the Action Plan.",
+                    "sl": "Izpolnili ste vsa orodja, ki so na voljo za vaš profil. "
+                          "Zdaj lahko ustvarite akcijski načrt."},
+    "pros_fatti": {"it": "Strumenti già compilati",
+                   "en": "Tools already completed",
+                   "sl": "Že izpolnjena orodja"},
+    "menu_torna": {"it": "↩ Torna al menu H2READY",
+                   "en": "↩ Back to the H2READY menu",
+                   "sl": "↩ Nazaj v meni H2READY"},
+
+    # --- Action Plan ---
+    "ap_titolo": {"it": "Il tuo Action Plan",
+                  "en": "Your Action Plan",
+                  "sl": "Vaš akcijski načrt"},
+    "ap_bottone": {"it": "📄 Genera l'Action Plan del Comune",
+                   "en": "📄 Generate the municipal Action Plan",
+                   "sl": "📄 Ustvarite občinski akcijski načrt"},
+    "ap_pronto": {"it": "Hai completato tutto quello che il tuo profilo prevede: "
+                        "il documento può essere generato.",
+                  "en": "You have completed everything your profile calls for: "
+                        "the document can now be generated.",
+                  "sl": "Izpolnili ste vse, kar predvideva vaš profil: dokument je "
+                        "mogoče ustvariti."},
+    "ap_parziale": {"it": "Puoi generarlo anche adesso, ma conterrà soltanto gli "
+                          "strumenti già compilati. Gli altri restano fuori.",
+                    "en": "You can generate it now as well, but it will contain only "
+                          "the tools already completed. The rest stays out.",
+                    "sl": "Ustvarite ga lahko tudi zdaj, vendar bo vseboval le že "
+                          "izpolnjena orodja. Ostala ostanejo zunaj."},
+    "ap_l0": {"it": "Il Comune è in Livello 0: l'Action Plan non è generabile finché "
+                    "non viene completato il questionario 1.1.",
+              "en": "The municipality is at Level 0: the Action Plan cannot be "
+                    "generated until questionnaire 1.1 is completed.",
+              "sl": "Občina je na ravni 0: akcijskega načrta ni mogoče ustvariti, "
+                    "dokler ni izpolnjen vprašalnik 1.1."},
 }
 
 
@@ -398,12 +472,6 @@ def testo(riga, colonna, predefinito=""):
     if riga is None or colonna not in riga.index or vuoto(riga[colonna]):
         return predefinito
     return str(riga[colonna]).strip()
-
-
-def vero(valore) -> bool:
-    """True se il campo esprime un sì, in italiano, inglese o sloveno."""
-    return str(valore).strip().lower() in ("si", "sì", "yes", "y", "true", "vero",
-                                           "da", "1", "1.0", "x")
 
 
 def intestazione_comune(riga, sottotitolo=""):
@@ -658,27 +726,38 @@ def url_con_contesto(url, id_istat, lingua=None) -> str:
     return f"{url}{separatore}{coda}"
 
 
-def mostra_prossimi_tool(riga, lingua=None, foglio="LINK"):
+def url_tool(codice, url_foglio):
+    """URL effettivo di uno strumento: l'override vince sul foglio LINK."""
+    return URL_OVERRIDE.get(str(codice).strip(), url_foglio)
+
+
+def mostra_prossimi_tool(riga, lingua=None, foglio="LINK", solo_mancanti=False):
     """Elenca gli strumenti: attivi come pulsanti, bloccati in grigio col motivo.
 
     Il foglio LINK ha colonne: tool | nome | url | percorso | categoria | ordine
     dove categoria vale "base", "avanzato" o "fast". Il generatore di Action Plan
     non va inserito nel foglio: e' uno strumento interno al gruppo di progetto.
+
+    solo_mancanti=True nasconde gli strumenti gia' compilati: serve al blocco
+    "prosegui cosi'", dove l'elenco completo distoglierebbe da cio' che resta
+    davvero da fare. Restituisce quanti strumenti sono stati mostrati.
     """
+    if lingua:
+        imposta_lingua(lingua)
     try:
         tabella = _tabella_link(foglio)
     except Exception as e:
         st.error(f"{TT('link_no_foglio')}\n\n`{e}`")
-        return
+        return 0
     if tabella.empty:
         st.info(TT("link_no_foglio"))
-        return
+        return 0
 
     mancanti = [c for c in ("tool", "url") if c not in tabella.columns]
     if mancanti:
         st.error(f"Nel foglio {foglio} mancano le colonne: {', '.join(mancanti)}. "
                  f"Colonne trovate: {', '.join(tabella.columns)}")
-        return
+        return 0
 
     stato = percorsi_disponibili(riga)
     liv = livello(riga)
@@ -688,11 +767,15 @@ def mostra_prossimi_tool(riga, lingua=None, foglio="LINK"):
     if "ordine" in tabella.columns:
         tabella = tabella.sort_values("ordine")
 
+    mostrati = 0
     for _, r in tabella.iterrows():
         codice = str(r.get("tool", "")).strip()
         nome = str(r.get("nome", codice)).strip()
         percorso = str(r.get("percorso", "")).strip().upper()
-        url = str(r.get("url", "")).strip()
+        url = url_tool(codice, str(r.get("url", "")).strip())
+
+        if solo_mancanti and fatti.get(codice):
+            continue
 
         categoria = str(r.get("categoria", "base")).strip().lower()
         if categoria not in ("base", "avanzato", "fast"):
@@ -714,10 +797,16 @@ def mostra_prossimi_tool(riga, lingua=None, foglio="LINK"):
         elif categoria == "avanzato" and liv == "L2":
             nota = "  ·  " + TT("link_supporto")
 
+        # Uno strumento bloccato non e' "da compilare": nella tendina dei
+        # mancanti farebbe solo rumore, perche' il Comune non puo' aprirlo.
+        if solo_mancanti and bloccato:
+            continue
+
         etichetta = f"{codice} - {nome}"
         if fatti.get(codice):
             etichetta = "✔ " + etichetta
 
+        mostrati += 1
         if bloccato:
             st.markdown(
                 f"<div style='padding:10px 14px;margin-bottom:8px;border-radius:8px;"
@@ -725,9 +814,112 @@ def mostra_prossimi_tool(riga, lingua=None, foglio="LINK"):
                 f"<b>{etichetta}</b><br><span style='font-size:.85rem'>{motivo}</span></div>",
                 unsafe_allow_html=True)
         else:
-            st.link_button(etichetta + nota, url_con_contesto(url, id_istat, lingua),
+            st.link_button(etichetta + nota,
+                           url_con_contesto(url, id_istat, lingua_corrente()),
                            use_container_width=True)
+    return mostrati
 
+
+# =============================================================================
+# BLOCCHI DI CHIUSURA PAGINA, UGUALI IN TUTTI I TOOL
+# =============================================================================
+
+# Vedi prosegui(): Streamlit riesegue lo script da capo a ogni interazione, e
+# blocco_accesso() e' la prima chiamata di ogni tool, quindi e' li' che il
+# contrassegno viene azzerato.
+_PROSEGUI_DISEGNATO = False
+
+
+def torna_al_menu(riga=None, lingua=None):
+    """Pulsante di rientro alla pagina 1.3.
+
+    L'identificativo viaggia nell'URL, cosi' il Comune non lo ridigita; la
+    lingua pure, altrimenti un utente sloveno torna su una pagina italiana.
+    """
+    if lingua:
+        imposta_lingua(lingua)
+    id_istat = testo(riga, COL_ID) if riga is not None else ""
+    st.link_button(TT("menu_torna"),
+                   url_con_contesto(URL_MENU, id_istat, lingua_corrente()),
+                   use_container_width=True)
+
+
+def action_plan(riga, lingua=None, titolo=True):
+    """Accesso al generatore di Action Plan.
+
+    Compare in fondo a ogni tool e nella pagina 1.3. Il messaggio cambia a
+    seconda che manchino ancora strumenti: il documento si puo' generare in
+    qualunque momento, ma conta solo cio' che ha ricevuto, e conviene dirlo
+    prima che il Comune si ritrovi un piano a meta'.
+    """
+    if lingua:
+        imposta_lingua(lingua)
+
+    if titolo:
+        st.subheader(TT("ap_titolo"))
+
+    if riga is None or (hasattr(riga, "empty") and riga.empty) or livello(riga) == "L0":
+        st.info(TT("ap_l0"))
+        return
+
+    fatti = tool_completati(riga)
+    if all(fatti.values()):
+        st.success(TT("ap_pronto"))
+    else:
+        st.caption(TT("ap_parziale"))
+
+    st.link_button(TT("ap_bottone"),
+                   url_con_contesto(URL_ACTION_PLAN, testo(riga, COL_ID), lingua_corrente()),
+                   type="primary", use_container_width=True)
+
+
+def prosegui(riga, lingua=None, aperto=True, menu=True, foglio="LINK"):
+    """Tendina con i soli strumenti ancora da compilare.
+
+    Va chiamata in fondo a ogni tool. Mostra quanti strumenti restano gia' nel
+    titolo della tendina, cosi' chi ha finito lo capisce senza aprirla.
+
+    Si disegna una volta sola per esecuzione dello script: un tool che la mette
+    in fondo alla pagina E chiama dopo_salvataggio dopo un invio riuscito
+    altrimenti la mostrerebbe due volte nella stessa schermata.
+    """
+    global _PROSEGUI_DISEGNATO
+    if _PROSEGUI_DISEGNATO:
+        return
+    _PROSEGUI_DISEGNATO = True
+
+    if lingua:
+        imposta_lingua(lingua)
+    if riga is None or (hasattr(riga, "empty") and riga.empty):
+        # modalita' simulazione: non c'e' un Comune a cui riferire l'avanzamento
+        if menu:
+            st.divider()
+            torna_al_menu(None)
+        return
+
+    fatti = tool_completati(riga)
+    da_fare = [c for c, ok in fatti.items() if not ok]
+
+    st.divider()
+    if not da_fare:
+        st.success(TT("pros_finito"))
+    else:
+        titolo = (TT("pros_titolo_uno") if len(da_fare) == 1
+                  else TT("pros_titolo", n=len(da_fare)))
+        with st.expander(titolo, expanded=aperto):
+            st.caption(TT("pros_intro"))
+            n = mostra_prossimi_tool(riga, foglio=foglio, solo_mancanti=True)
+            if n == 0:
+                # tutto cio' che resta e' bloccato dal livello o dal percorso
+                st.info(TT("pros_finito"))
+            fatti_ora = [c for c, ok in fatti.items() if ok]
+            if fatti_ora:
+                st.caption(TT("pros_fatti") + ": " + " · ".join(sorted(fatti_ora)))
+
+    action_plan(riga, titolo=False)
+
+    if menu:
+        torna_al_menu(riga)
 
 
 def dopo_salvataggio(riga, lingua=None):
@@ -747,9 +939,7 @@ def dopo_salvataggio(riga, lingua=None):
         st.session_state["h2ready_riga"] = aggiornata
         riga = aggiornata
 
-    st.divider()
-    st.subheader(TT("prosegui"))
-    mostra_prossimi_tool(riga, lingua=lingua)
+    prosegui(riga, lingua=lingua)
     return riga
 
 
@@ -789,6 +979,9 @@ def blocco_accesso(titolo_tool, percorso=None, avanzato=False, categoria=None,
     Fermando l'esecuzione prima che i widget esistano, i valori del Comune sono
     gia' disponibili quando gli slider vengono creati.
     """
+    global _PROSEGUI_DISEGNATO
+    _PROSEGUI_DISEGNATO = False
+
     if categoria is None:
         categoria = "avanzato" if avanzato else "base"
     if lingua:
