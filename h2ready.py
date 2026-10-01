@@ -37,6 +37,13 @@ from streamlit_gsheets import GSheetsConnection
 # CONFIGURAZIONE
 # =============================================================================
 
+# Marcatore di versione del modulo. Questo file e' copiato a mano in quattro
+# repository: quando uno resta indietro i sintomi sono muti (un link vecchio,
+# una funzione che non esiste). Ogni tool lo stampa in fondo alla barra
+# laterale, cosi' si vede a colpo d'occhio quale copia sta girando.
+# DA AGGIORNARE a ogni modifica del file.
+VERSIONE_MODULO = "2026-10-01 · link SL"
+
 COL_ID = "ID_ISTAT"
 COL_NOME = "NOME_COMUNE"
 COL_MATURITA = "T11_LIVELLO_MATURITA"
@@ -746,6 +753,18 @@ def url_con_contesto(url, id_istat, lingua=None) -> str:
     return f"{url}{separatore}{coda}"
 
 
+def _codice_tool(valore):
+    """Numero dello strumento, estratto da una cella del foglio LINK.
+
+    Tollera le forme in cui la colonna "tool" puo' essere stata scritta:
+    "2.3", "Tool 2.3", "2.3 - Valutazione domanda", "TOOL 2,3". Senza questo,
+    una cella scritta diversamente dal previsto fa fallire in silenzio sia la
+    spunta di completamento sia la scelta del link per lingua.
+    """
+    m = re.search(r"(\d)\s*[.,]\s*(\d)", str(valore or ""))
+    return f"{m.group(1)}.{m.group(2)}" if m else str(valore or "").strip()
+
+
 def url_tool(codice, url_foglio, lingua=None):
     """URL effettivo di uno strumento, nell'ordine in cui si decide.
 
@@ -758,7 +777,7 @@ def url_tool(codice, url_foglio, lingua=None):
     questionari suoi, quindi un utente inglese apre i form italiani. E' voluto,
     ma e' bene saperlo.
     """
-    c = str(codice).strip()
+    c = _codice_tool(codice)
     lin = lingua or lingua_corrente()
     per_lingua = URL_LINGUA.get(lin, {})
     if c in per_lingua:
@@ -803,11 +822,14 @@ def mostra_prossimi_tool(riga, lingua=None, foglio="LINK", solo_mancanti=False):
         tabella = tabella.sort_values("ordine")
 
     mostrati = 0
+    diagnostica = []
     for _, r in tabella.iterrows():
-        codice = str(r.get("tool", "")).strip()
+        codice = _codice_tool(r.get("tool", ""))
         nome = str(r.get("nome", codice)).strip()
         percorso = str(r.get("percorso", "")).strip().upper()
-        url = url_tool(codice, str(r.get("url", "")).strip())
+        url_grezzo = str(r.get("url", "")).strip()
+        url = url_tool(codice, url_grezzo)
+        diagnostica.append((str(r.get("tool", "")), codice, url_grezzo, url))
 
         if solo_mancanti and fatti.get(codice):
             continue
@@ -852,6 +874,23 @@ def mostra_prossimi_tool(riga, lingua=None, foglio="LINK", solo_mancanti=False):
             st.link_button(etichetta + nota,
                            url_con_contesto(url, id_istat, lingua_corrente()),
                            use_container_width=True)
+
+    # Con ?debug=1 nell'indirizzo si vede come e' stata risolta ogni riga del
+    # foglio: cella letta, codice riconosciuto, URL del foglio, URL servito.
+    # Serve quando un link non cambia con la lingua e non si capisce se il
+    # problema sia il modulo vecchio o una cella scritta in altro modo.
+    try:
+        debug = str(st.query_params.get("debug", "")).strip() == "1"
+    except Exception:
+        debug = False
+    if debug and diagnostica:
+        with st.expander(f"Diagnostica link · h2ready {VERSIONE_MODULO} · "
+                         f"lingua {lingua_corrente()}"):
+            st.table(pd.DataFrame(diagnostica, columns=[
+                "cella 'tool'", "codice riconosciuto", "url nel foglio", "url servito"]))
+            st.caption("Lingue con link propri: " +
+                       ", ".join(sorted(URL_LINGUA)) + " · strumenti con link per lingua: " +
+                       ", ".join(sorted({c for m in URL_LINGUA.values() for c in m})))
     return mostrati
 
 
@@ -1021,6 +1060,8 @@ def blocco_accesso(titolo_tool, percorso=None, avanzato=False, categoria=None,
         categoria = "avanzato" if avanzato else "base"
     if lingua:
         imposta_lingua(lingua)
+
+    st.sidebar.caption(f"h2ready {VERSIONE_MODULO}")
 
     if "h2ready_riga" in st.session_state:
         riga = st.session_state["h2ready_riga"]
