@@ -77,6 +77,22 @@ EMISSIONI_DIESEL_KG_LITRO = 2.7     # kgCO2 per litro di gasolio
 LITRI_DIESEL_PER_KG_H2 = EFFICIENZA_H2_KM_KG / EFFICIENZA_DIESEL_KM_LITRO
 CO2_DIESEL_SOSTITUITO_KG_KG_H2 = LITRI_DIESEL_PER_KG_H2 * EMISSIONI_DIESEL_KG_LITRO
 
+# --- Riferimenti per la domanda di PROCESSO ---------------------------------
+# L'idrogeno impiegato in un forno fusorio o come materia prima non sostituisce
+# gasolio e non alimenta autobus: tradurlo in litri di gasolio e in mezzi era
+# aritmeticamente coerente ma concettualmente sbagliato, e in sala lo si nota.
+# Il termine di confronto corretto e' il metano per il calore di processo e
+# l'idrogeno grigio da reforming per gli usi come materia prima.
+PCI_METANO_KWH_SM3 = 9.59            # potere calorifico inferiore del gas naturale
+EMISSIONI_METANO_KG_CO2_SM3 = 1.98   # combustione, fattore ISPRA
+# Idrogeno grigio da steam methane reforming: e' cio' che un'industria usa oggi
+# quando le serve la molecola, ed e' la baseline degli obblighi RED III.
+EMISSIONI_H2_GRIGIO_KG_CO2_KG = 9.5
+
+# A pari energia utile, 1 kg di H2 (33,3 kWh) sostituisce questi Sm3 di metano
+SM3_METANO_PER_KG_H2 = 33.3 / PCI_METANO_KWH_SM3
+CO2_METANO_SOSTITUITO_KG_KG_H2 = SM3_METANO_PER_KG_H2 * EMISSIONI_METANO_KG_CO2_SM3
+
 # --- Emissioni dell'idrogeno prodotto ---------------------------------------
 # Un chilogrammo di idrogeno non è mai a zero emissioni: dipende da come viene
 # prodotto. Con elettricità di rete non certificata servono circa 55 kWh, che
@@ -249,7 +265,25 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T28_POTENZA_COMPRESSORE_KW", "T28_AREA_MINIMA_MQ",
            "T28_CAPEX_COMPLESSIVO_EURO", "T28_BREAK_EVEN_EURO_KG",
            "T28_CONFIGURAZIONE", "T28_N_DISPENSER", "T28_ORIZZONTE",
-           "T28_QUOTA_FCEV_PERC"}
+           "T28_QUOTA_FCEV_PERC",
+           # Colonne già discusse per esteso in altre sezioni: comparivano una
+           # seconda volta in "Altri dati disponibili", a volte in un'altra unità
+           # di misura, e il lettore trovava due numeri diversi per la stessa cosa
+           # (7,25 ha nella tabella delle superfici e 72.500 m² qui sotto).
+           "T25_AREE_IDONEE_MQ", "T25_FLAG_EOLICO_IDONEO",
+           "T25_PV_TERRA_INSTALLATO_MW", "T25_FLAG_DISPACCIAMENTO"}
+
+# Colonne di servizio del foglio: codici POD, identificativi, timestamp. Non
+# sono dati di piano e non vanno stampate: comparivano come "Pod terra 45.0".
+PREFISSI_TECNICI = ("_POD", "POD_", "_UUID", "_TIMESTAMP", "_SUBMISSION",
+                    "_RESPONSE", "_ROW", "_NOTE_INTERNE")
+
+
+def colonna_di_servizio(colonna: str) -> bool:
+    """Vero per le colonne che il foglio usa per sé e che non vanno in tabella."""
+    up = str(colonna).upper()
+    return any(p in up for p in PREFISSI_TECNICI)
+
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
@@ -481,6 +515,42 @@ def formatta_numero(n: float) -> str:
     return f"{n:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
 
 
+def _forma_articolo(testo: str) -> str:
+    """'il' / 'lo' / 'l'' secondo come si legge il numero in italiano."""
+    prima = testo[0]
+    if prima == "0":                                   # zero
+        return "lo"
+    if prima == "8" or testo == "1" or testo.startswith("11") \
+            or testo.startswith("1,") or testo.startswith("8"):
+        return "l'"                                    # otto, uno, undici
+    return "il"
+
+
+def percentuale(n: float) -> str:
+    """Percentuale con l'articolo corretto: 'il 25%', 'lo 0%', 'l'80%'.
+
+    Serve perche' il valore e' calcolato ma l'articolo che lo precede era fisso:
+    uscivano 'pari al 0%' e 'raggiunge il 80%'.
+    """
+    testo = formatta_numero(n)
+    art = _forma_articolo(testo)
+    return f"{art}{testo}%" if art == "l'" else f"{art} {testo}%"
+
+
+def percentuale_a(n: float) -> str:
+    """Forma con preposizione A: 'al 25%', 'allo 0%', 'all'80%'."""
+    testo = formatta_numero(n)
+    art = _forma_articolo(testo)
+    return {"il": f"al {testo}%", "lo": f"allo {testo}%"}.get(art, f"all'{testo}%")
+
+
+def percentuale_di(n: float) -> str:
+    """Forma con preposizione DI: 'del 25%', 'dello 0%', 'dell'80%'."""
+    testo = formatta_numero(n)
+    art = _forma_articolo(testo)
+    return {"il": f"del {testo}%", "lo": f"dello {testo}%"}.get(art, f"dell'{testo}%")
+
+
 def tipo_e_unita(colonna: str):
     up = colonna.upper()
     if "FLAG" in up or up.endswith("_FATTIBILE") or up.startswith("T25_ENTRO"):
@@ -594,12 +664,27 @@ def leggi_md(filename: str) -> str:
 
 
 def ripulisci_md(testo: str) -> str:
-    """Toglie dai .md i residui di esportazione: marcatori di citazione e LaTeX."""
+    """Toglie dai .md i residui di esportazione: marcatori di citazione e LaTeX.
+
+    Normalizza anche due notazioni che il renderer non interpreta e che quindi
+    finirebbero stampate letteralmente nel documento consegnato al Comune:
+      *corsivo*            -> **grassetto**  (il renderer gestisce solo il doppio
+                              asterisco; il singolo arrivava a video cosi' com'era)
+      `T11_LIVELLO_MATURITA` -> T11_LIVELLO_MATURITA  (i backtick non vengono
+                              resi, e un nome di colonna del foglio non va in un
+                              documento destinato agli amministratori)
+    La sostituzione e' qui e non solo nei .md perche' copre anche i file di testo
+    aggiunti in seguito, che nessuno ricontrollera'.
+    """
     testo = re.sub(r"\[cite_start\]", "", testo)
     testo = re.sub(r"\[cite:[^\]]*\]", "", testo)
     testo = re.sub(r"\$+\\?text\{([^}]*)\}\$*", r"\1", testo)
     testo = re.sub(r"\$([^$]*)\$", r"\1", testo)
-    testo = re.sub(r"[ \t]+([.,;:])", r"\1", testo)
+    testo = re.sub(r"`([^`\n]+)`", r"\1", testo)
+    testo = re.sub(r"(?<![\*\w])\*(?!\*)([^\*\n]{1,160}?)(?<![\*\s])\*(?!\*)",
+                   r"**\1**", testo)
+    testo = re.sub(r"^(#{1,6})(?=[^#\s])", r"\1 ", testo, flags=re.M)
+    testo = re.sub(r"[ \t]+([.,;:\)])", r"\1", testo)
     return testo.strip()
 
 
@@ -654,7 +739,31 @@ def testo_profilo(profilo: str, punteggi: dict) -> str:
     return "\n".join(out)
 
 
-def testo_passo2(riga) -> str:
+QUESTIONARI_PERCORSO = {
+    "A": ["il 2.1 (industria Hard-to-Abate)", "il 2.2 (flotte e TCO)",
+          "il 2.3 (usi di nicchia)", "il 2.4 (fabbisogno termico)"],
+    "B": ["il 2.5 (aree e potenziale rinnovabile)",
+          "il 2.6 (dimensionamento della produzione)"],
+    "C": ["il 2.7 (vocazione al transito)", "il 2.8 (progetto della stazione)"],
+}
+
+
+def sostanziale(testo: str) -> bool:
+    """Vero se un testo di sezione contiene qualcosa oltre al titolo."""
+    if not testo:
+        return False
+    return bool([r for r in testo.splitlines()
+                 if r.strip() and not r.lstrip().startswith("#")])
+
+
+def elenco_percorsi(codici) -> str:
+    voci = [f"il percorso {c}" for c in codici]
+    if len(voci) == 1:
+        return voci[0]
+    return ", ".join(voci[:-1]) + " e " + voci[-1]
+
+
+def testo_passo2(riga, profilo: str = "") -> str:
     intro = ""
     for nome in ("5-percorsi_intro_it.md", "Intro Percorsi.md"):
         if os.path.exists(nome):
@@ -667,6 +776,7 @@ def testo_passo2(riga) -> str:
             "I valori derivano dai questionari e dagli strumenti di calcolo del Toolkit "
             "H2READY. I campi non compilati non compaiono nelle tabelle.", ""]
     conteggio = 0
+    vuoti = []
 
     for percorso in PERCORSI:
         blocchi_pieni = []
@@ -684,21 +794,49 @@ def testo_passo2(riga) -> str:
         # un percorso puo' non avere blocchi tabellari e avere comunque molto da
         # dire: e' il caso del percorso A, i cui dati sono discussi per esteso
         commento = commento_percorso(riga, percorso["codice"])
-        if not blocchi_pieni and not commento:
+
+        # Un percorso senza dati non deve aprire il capitolo: prima il documento
+        # stampava titolo e premessa e poi taceva, e il lettore vedeva una
+        # sezione promessa e vuota. Meglio una riga che dice cosa manca.
+        if not blocchi_pieni and not sostanziale(commento):
+            if percorso["codice"] in (profilo or ""):
+                vuoti.append(percorso["codice"])
             continue
 
         # ogni percorso è un capitolo a sé: comincia su pagina nuova
         out.append("<<<PAGINA>>>")
         if commento:
             out += [commento, ""]
+            # il commento È contenuto tecnico: conteggiarlo evita che il
+            # documento si chiuda dicendo che non ci sono dati dopo averne
+            # discusso per pagine
+            conteggio += 1
         for titolo_blocco, righe in blocchi_pieni:
             conteggio += len(righe)
             out.append(f"### {titolo_blocco}")
             out += ["| Parametro | Valore |", "| --- | --- |"] + righe + [""]
 
+    # --- percorsi aperti dal profilo ma privi di dati
+    if vuoti:
+        out.append("<<<PAGINA>>>")
+        out.append("## Percorsi aperti dal profilo ma non ancora documentati")
+        out.append("Il profilo strategico assegnato al Comune apre "
+                   + elenco_percorsi(vuoti) +
+                   ", ma i questionari che li alimentano non risultano compilati. "
+                   "Le sezioni corrispondenti non sono state generate: un capitolo "
+                   "con il titolo e senza numeri non aiuterebbe a decidere.")
+        out.append("")
+        out += [f"- **Percorso {c}** - {NOMI_PROFILO[c]}: da compilare "
+                f"{', '.join(QUESTIONARI_PERCORSO.get(c, []))}" for c in vuoti]
+        out.append("")
+        out.append("È il primo adempimento del cronoprogramma: senza questi dati il "
+                   "piano d'azione resta dimensionato su una parte sola del territorio.")
+        out.append("")
+
     previste = {c for p in PERCORSI for _, cols in p["blocchi"] for c in cols}
     altre = [c for c in riga.index
              if c not in ESCLUSE and c not in FLAG_GOVERNANCE and c not in previste
+             and not colonna_di_servizio(c) and c in ETICHETTE
              and not is_vuoto(riga[c])]
     if altre:
         out.append("## Altri dati disponibili")
@@ -823,7 +961,7 @@ decisiva non è la capacità installata ma **la continuità della domanda**.
 Un'utenza industriale offre esattamente ciò che manca a tutte le altre: un consumo
 prevedibile, distribuito su tutto l'anno, indipendente dalla stagione e dalle
 vacanze scolastiche. È per questo che i modelli di business dell'idrogeno ruotano
-attorno al contratto di acquisto pluriennale, il cosiddetto *off-take*: senza un
+attorno al contratto di acquisto pluriennale, il cosiddetto **off-take**: senza un
 volume impegnato per almeno dieci anni nessun istituto finanzia un elettrolizzatore,
 e la Strategia Nazionale individua proprio nella creazione di una domanda vincolata
 la prima delle azioni necessarie a far partire la filiera.
@@ -878,6 +1016,32 @@ discutere di tecnologie e di costi.
 """
 
 
+def aziende_da_classificare(aziende: list) -> list:
+    """Aziende il cui codice ATECO non permette di stabilire il processo.
+
+    Senza codice il tool non sa se l'idrogeno serva o no, ma il fabbisogno viene
+    comunque ripartito e da li' discendono energia, suolo, investimento e giudizio
+    di massa critica. Vanno isolate per poter marcare come provvisoria tutta la
+    catena che ne dipende, invece di presentarla come un dato accertato.
+    """
+    fuori = []
+    for a in aziende:
+        codice = AT.normalizza(a.get("ateco")) or ""
+        dal_tool = AT.da_famiglia(a.get("famiglia"))
+        verdetto = dal_tool[0] if dal_tool else AT.verdetto(a.get("ateco"))
+        if not codice or str(verdetto).strip().lower().startswith("da classificare"):
+            fuori.append(a)
+    return fuori
+
+
+def domanda_provvisoria(riga) -> bool:
+    """Vero se la domanda industriale poggia su aziende non classificate."""
+    aziende = costruisci_aziende(riga)
+    if not aziende:
+        return False
+    return len(aziende_da_classificare(aziende)) == len(aziende)
+
+
 def sezione_hta(riga) -> str:
     """Sezione 2.1: mappatura delle utenze industriali Hard-to-Abate."""
     ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
@@ -887,13 +1051,27 @@ def sezione_hta(riga) -> str:
     out = [testo, ""]
 
     if not aziende and not ind:
-        out.append("Lo screening del tessuto industriale locale non ha rilevato impianti "
-                   "classificabili nei settori prioritari Hard-to-Abate. Sul territorio "
-                   "comunale non sussiste quindi una domanda industriale diretta capace "
-                   "di giustificare da sola un'infrastruttura dedicata: la strategia va "
-                   "orientata all'elettrificazione delle utenze termiche a bassa e media "
-                   "temperatura e all'efficienza energetica, riservando l'idrogeno agli "
-                   "altri percorsi.")
+        # "Non ha rilevato" e "non e' stato compilato" sono due affermazioni
+        # diverse, e la prima detta al posto della seconda e' un errore: il
+        # conteggio delle aziende idonee vale 0 se lo screening e' stato fatto e
+        # resta vuoto se il questionario non e' mai arrivato.
+        svolto = not is_vuoto(riga.get("T21_N_AZIENDE_IDONEE"))
+        if svolto:
+            out.append("Lo screening del tessuto industriale locale non ha rilevato "
+                       "impianti classificabili nei settori prioritari Hard-to-Abate. Sul "
+                       "territorio comunale non sussiste quindi una domanda industriale "
+                       "diretta capace di giustificare da sola un'infrastruttura dedicata: "
+                       "la strategia va orientata all'elettrificazione delle utenze "
+                       "termiche a bassa e media temperatura e all'efficienza energetica, "
+                       "riservando l'idrogeno agli altri percorsi.")
+        else:
+            out.append("Il questionario 2.1 non risulta compilato per questo Comune: lo "
+                       "screening del tessuto industriale non è stato svolto. **Non si "
+                       "può quindi affermare né che esista né che manchi** una domanda "
+                       "industriale sul territorio. È la prima verifica da fare, perché la "
+                       "domanda di processo è l'unica componente continua su tutto l'anno "
+                       "e quindi quella che determina la sostenibilità di qualunque "
+                       "impianto.")
         return "\n".join(out)
 
     stimato = ripartisci_fabbisogno(aziende, ind)
@@ -930,6 +1108,29 @@ def sezione_hta(riga) -> str:
                        "pesata sull'intensità di idrogeno tipica di ciascun settore. Non "
                        "sostituiscono la rilevazione puntuale presso le singole imprese, "
                        "che resta il passo successivo.")
+            out.append("")
+
+        # --- avvertenza sulle aziende senza codice ATECO utilizzabile
+        da_classificare = aziende_da_classificare(aziende)
+        if da_classificare:
+            tutte = len(da_classificare) == len(aziende)
+            quali = ", ".join(a["nome"] for a in da_classificare if a.get("nome"))
+            out.append("> **Dato da verificare prima di ogni uso.** "
+                       + ("Nessuna delle aziende individuate ha un codice ATECO "
+                          "classificabile"
+                          if tutte else
+                          f"Per {len(da_classificare)} delle {len(aziende)} aziende "
+                          "individuate il codice ATECO non è classificabile")
+                       + (f" ({quali})" if quali else "")
+                       + ": il processo produttivo non è determinato e quindi non è "
+                       "accertato che l'idrogeno sia tecnicamente necessario. "
+                       + ("Tutte le grandezze che seguono - energia, suolo, "
+                          "investimento, soglia di sostenibilità - discendono da "
+                          "questo fabbisogno e vanno lette come ipotesi di lavoro, "
+                          "non come risultato dell'analisi. "
+                          if tutte else "")
+                       + "La verifica dei codici presso le imprese è il primo "
+                       "adempimento del cronoprogramma.")
             out.append("")
 
         # legenda dei verdetti effettivamente comparsi
@@ -1306,7 +1507,7 @@ DETTAGLIO_NICCHIE = {
                  "per giorno e appartiene a un unico soggetto, quindi è "
                  "contrattualizzabile: sono le due condizioni che rendono un impianto "
                  "finanziabile.\n\n"
-                 "In ambito portuale si aggiunge la prospettiva del *cold ironing* e "
+                 "In ambito portuale si aggiunge la prospettiva del **cold ironing** e "
                  "dell'alimentazione delle navi all'ormeggio, che sposta il fabbisogno su "
                  "un ordine di grandezza superiore, e la possibilità di ricevere idrogeno "
                  "via nave o via ammoniaca. Un porto non è quindi solo un consumatore ma "
@@ -1718,8 +1919,8 @@ def sezione_aree(riga) -> str:
         if pubblica_mq > 0:
             quota_pub = pubblica_mq / totale_mq * 100
             out.append(f"Di queste superfici, **{formatta_numero(pubblica_mq / 10000)} "
-                       f"ettari sono di proprietà pubblica**, pari al "
-                       f"{formatta_numero(quota_pub)}% del totale.")
+                       f"ettari sono di proprietà pubblica**, pari "
+                       f"{percentuale_a(quota_pub)} del totale.")
             if quota_pub >= 50:
                 out.append("È la condizione più favorevole che un Comune possa avere: la "
                            "disponibilità delle aree non dipende da trattative con "
@@ -1851,7 +2052,8 @@ def sezione_produzione(riga) -> str:
                              TESTO_PRODUZIONE_PREDEFINITO), ""]
 
     if not is_vuoto(modalita):
-        out.append(f"La simulazione è stata condotta in modalità *{str(modalita).strip()}*.")
+        out.append("La simulazione è stata condotta in modalità "
+                   f"**{str(modalita).strip()}**.")
         out.append("")
 
     # --- configurazione
@@ -2232,8 +2434,11 @@ def sezione_transito(riga) -> str:
         out += ["| Parametro | Valore |", "| --- | --- |",
                 f"| Traffico giornaliero medio di mezzi pesanti | {formatta_numero(tgm)} mezzi/giorno |",
                 f"| Transiti annui | {formatta_numero(annui)} mezzi/anno |"]
-        if snam is not None:
+        if snam is not None and snam > 0:
             out.append(f"| Distanza dalla dorsale di trasporto | {formatta_numero(snam)} km |")
+        elif snam is not None:
+            out.append("| Distanza dalla dorsale di trasporto | da confermare "
+                       "(indicata come 0 km) |")
         out.append("")
 
         if tgm >= TGM_DIRETTRICE:
@@ -2385,14 +2590,30 @@ def _lettura_punteggi(scores) -> str:
                        "richiede investimenti: inserire l'idrogeno negli strumenti di "
                        "pianificazione e individuare le aree costa tempo, non denaro.")
         elif media_tec < gov - 0.2:
-            out.append(f"La governance raggiunge il {formatta_numero(gov * 100)}% del "
-                       f"massimo mentre le dimensioni tecniche si fermano al "
-                       f"{formatta_numero(media_tec * 100)}%. **L'amministrazione è pronta, "
-                       "il territorio meno.** È una capacità che conviene indirizzare sugli "
-                       "altri percorsi, dove le condizioni fisiche sono più favorevoli, "
-                       "oppure sulla cooperazione con i Comuni limitrofi: la preparazione "
-                       "amministrativa è la risorsa più scarsa di questi progetti e "
-                       "sprecarla su un nodo debole sarebbe un peccato.")
+            # La media delle dimensioni tecniche comprende i flussi di traffico:
+            # dirla senza nominarla contraddiceva il paragrafo precedente, che
+            # poteva avere appena dichiarato il traffico al massimo del punteggio.
+            forti_tec = [ETICHETTE_SCORE[k] for k, q in quote.items()
+                         if k != "T27_SCORE_GOV" and q >= QUOTA_SCORE_FORTE]
+            frase = (f"La governance raggiunge {percentuale(gov * 100)} del massimo, "
+                     f"contro una media {percentuale_di(media_tec * 100)} sulle tre "
+                     "dimensioni tecniche. **L'amministrazione è più pronta del "
+                     "territorio.**")
+            if forti_tec:
+                frase += (" Il confronto è però su una media: "
+                          + ", ".join(f.lower() for f in forti_tec)
+                          + (" resta una dimensione forte"
+                             if len(forti_tec) == 1 else " restano dimensioni forti")
+                          + ", e su quella il nodo regge. Lo scarto si concentra "
+                          "sulle altre, che vanno colmate prima del "
+                          "dimensionamento.")
+            else:
+                frase += (" È una capacità che conviene indirizzare sugli altri percorsi, "
+                          "dove le condizioni fisiche sono più favorevoli, oppure sulla "
+                          "cooperazione con i Comuni limitrofi: la preparazione "
+                          "amministrativa è la risorsa più scarsa di questi progetti e "
+                          "sprecarla su un nodo debole sarebbe un peccato.")
+            out.append(frase)
         else:
             out.append("Capacità tecnica e capacità amministrativa sono allineate: il "
                        "territorio e l'ente procedono allo stesso passo, che è la "
@@ -2621,22 +2842,59 @@ def sezione_hrs(riga) -> str:
 
 
 def testo_percorso_a(riga) -> str:
-    """Percorso A: introduzione, quattro rilevazioni, bilancio finale."""
-    ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
-    flotta = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
-    dom = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_H2_TON_ANNO"])
+    """Percorso A: introduzione, quattro rilevazioni, bilancio finale.
 
-    out = [testo_da_template("A00-percorso_intro_it.md", {}, TESTO_PERCORSO_A_INTRO), ""]
+    La composizione sta in parti_percorso, cosi' il testo che finisce nel
+    documento e il criterio con cui si decide se il capitolo ha dati restano
+    una cosa sola e non possono divergere.
+    """
+    return commento_percorso(riga, "A")
 
-    # --- le quattro rilevazioni
-    for sezione in (sezione_hta(riga), sezione_flotte(riga),
-                    sezione_nicchie(riga), sezione_termico(riga)):
-        if sezione:
-            out += [sezione, ""]
 
-    # --- bilancio complessivo, in chiusura
-    out.append(bilancio_domanda(riga, ind, flotta, dom))
-    return "\n".join(p for p in out if p is not None).strip()
+def saldo_domanda_offerta(riga, dom) -> str:
+    """Confronto fra la domanda rilevata e la produzione simulata nel percorso B.
+
+    È la grandezza che il documento non dichiarava: la domanda veniva sommata nel
+    percorso A, la produzione dimensionata nel percorso B, e la differenza fra le
+    due - cioè quanto idrogeno il territorio deve comprare fuori - non compariva
+    in nessuna pagina. Per un piano che si fonda sul legare domanda e offerta era
+    l'omissione più grave.
+    """
+    prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
+    if not dom or prod is None:
+        return ""
+
+    saldo = prod - dom
+    copertura = prod / dom * 100 if dom else 0.0
+    out = ["#### Saldo fra domanda e produzione locale", "",
+           "| Grandezza | Valore |", "| --- | --- |",
+           f"| Domanda rilevata (percorso A) | {formatta_numero(dom)} t/anno |",
+           f"| Produzione simulata (percorso B) | {formatta_numero(prod)} t/anno |",
+           f"| Saldo | {'+' if saldo >= 0 else '-'}"
+           f"{formatta_numero(abs(saldo))} t/anno |",
+           f"| Copertura della domanda | {formatta_numero(copertura)}% |", ""]
+
+    if saldo < 0:
+        out.append(f"La produzione locale copre {percentuale(copertura)} della domanda: "
+                   f"restano **{formatta_numero(abs(saldo))} tonnellate all'anno da "
+                   "approvvigionare fuori dal territorio comunale**. È il numero che "
+                   "giustifica l'aggregazione con i Comuni limitrofi e l'adesione a un "
+                   "progetto di scala sovracomunale: senza quelli, la quota mancante si "
+                   "acquista sul mercato a prezzi su cui l'ente non ha alcuna leva.")
+    elif saldo > 0:
+        out.append(f"La produzione simulata eccede la domanda locale di "
+                   f"**{formatta_numero(saldo)} tonnellate all'anno**. L'eccedenza non è un "
+                   "margine di sicurezza ma un rischio: un impianto che produce più di "
+                   "quanto il territorio consuma ha bisogno di un acquirente esterno "
+                   "contrattualizzato prima della costruzione, altrimenti lavora a carico "
+                   "parziale e il costo del chilogrammo sale in proporzione.")
+    else:
+        out.append("Produzione e domanda si equivalgono. È la configurazione più efficiente "
+                   "sulla carta e la più fragile nei fatti: basta che un utilizzatore si "
+                   "sfili perché l'impianto resti scoperto, quindi il dimensionamento va "
+                   "accompagnato da contratti di acquisto e non da previsioni.")
+    out.append("")
+    return "\n".join(out)
 
 
 def bilancio_domanda(riga, ind, flotta, dom) -> str:
@@ -2695,13 +2953,58 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
         out.append("")
 
     # --- ordini di grandezza
+    # Le equivalenze dipendono da cosa consuma l'idrogeno: una domanda di processo
+    # non si traduce in autobus ne' in litri di gasolio.
+    solo_processo = bool(ind) and not flotta
     out.append("#### Che cosa significano questi volumi")
-    out += ["| Riferimento | Valore |", "| --- | --- |",
-            f"| Domanda complessiva | {formatta_numero(dom)} t/anno |",
-            f"| Erogazione media giornaliera | {formatta_numero(kg_giorno)} kg/giorno |",
-            f"| Equivalente in autobus urbani alimentabili | {formatta_numero(bus_eq)} mezzi |",
+    righe_eq = [f"| Domanda complessiva | {formatta_numero(dom)} t/anno |",
+                f"| Erogazione media giornaliera | {formatta_numero(kg_giorno)} kg/giorno |"]
+
+    if solo_processo:
+        sm3 = dom * 1000 * SM3_METANO_PER_KG_H2
+        co2_metano = dom * (CO2_METANO_SOSTITUITO_KG_KG_H2 - emissioni_h2(quota_rfnbo))
+        co2_grigio = dom * (EMISSIONI_H2_GRIGIO_KG_CO2_KG - emissioni_h2(quota_rfnbo))
+        righe_eq += [
+            f"| Metano sostituito, a pari energia utile | "
+            f"{formatta_numero(sm3)} Sm³/anno |",
+            f"| Emissioni evitate sul calore di processo | "
+            f"{formatta_numero(co2_metano)} tCO2/anno |",
+            f"| Emissioni evitate se sostituisce idrogeno grigio | "
+            f"{formatta_numero(co2_grigio)} tCO2/anno |"]
+    else:
+        righe_eq += [
+            f"| Equivalente in autobus urbani alimentabili | "
+            f"{formatta_numero(bus_eq)} mezzi |",
             f"| Gasolio sostituito | {formatta_numero(litri)} litri/anno |",
-            f"| Emissioni evitate al netto della produzione | {formatta_numero(co2)} tCO2/anno |", ""]
+            f"| Emissioni evitate al netto della produzione | "
+            f"{formatta_numero(co2)} tCO2/anno |"]
+
+    out += ["| Riferimento | Valore |", "| --- | --- |"] + righe_eq + [""]
+
+    if solo_processo:
+        out.append("> La domanda rilevata è interamente di processo: non alimenta veicoli, "
+                   "e il termine di confronto non è il gasolio ma ciò che l'impianto brucia "
+                   "o acquista oggi. Le due righe sulle emissioni corrispondono alle due "
+                   "situazioni possibili: idrogeno che sostituisce metano in un forno, "
+                   "oppure idrogeno che sostituisce idrogeno grigio da reforming là dove la "
+                   "molecola entra nella reazione. Quale delle due valga dipende dal "
+                   "processo, e il processo si accerta azienda per azienda.")
+        out.append("")
+        # Un numero negativo in tabella passa inosservato, e qui dice una cosa
+        # decisiva: con questa quota RFNBO sostituire metano peggiora il bilancio.
+        if co2_metano <= 0:
+            out.append("**Attenzione al segno della prima riga.** Alla quota di conformità "
+                       "RFNBO risultante dalla simulazione, un chilogrammo di questo "
+                       "idrogeno porta con sé più CO2 di quanta se ne eviti smettendo di "
+                       "bruciare metano: la sostituzione sul calore di processo "
+                       f"**peggiorerebbe il bilancio di {formatta_numero(abs(co2_metano))} "
+                       "tonnellate all'anno**. Resta un beneficio solo dove l'idrogeno "
+                       "sostituisce idrogeno grigio, cioè negli usi come materia prima. "
+                       "Non è un limite della tecnologia ma della sua alimentazione: il "
+                       "beneficio climatico torna positivo solo aumentando la quota "
+                       "certificata rinnovabile, ed è il motivo per cui la configurazione "
+                       "del percorso B va rivista prima di procedere.")
+            out.append("")
 
     if quota_rfnbo is None:
         out.append("> **Le emissioni evitate sono calcolate nell'ipotesi peggiore**, cioè "
@@ -2719,7 +3022,7 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
                    "kg di CO2 per kg di idrogeno.")
         out.append("")
 
-    if co2_unit <= 0:
+    if co2_unit <= 0 and not solo_processo:
         out.append("**La sostituzione peggiora il bilancio delle emissioni.** Con l'idrogeno "
                    "prodotto nelle condizioni ipotizzate, ogni chilogrammo emette più CO2 "
                    "del gasolio che sostituisce. Non è un difetto della tecnologia ma della "
@@ -2727,9 +3030,25 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
                    "la conversione non produce alcun beneficio climatico.")
         out.append("")
 
+    # --- saldo fra la domanda rilevata e la produzione simulata nel percorso B
+    # È il numero centrale del documento e prima non compariva: il piano
+    # affermava di legare domanda e offerta e non ne dichiarava la differenza.
+    out.append(saldo_domanda_offerta(riga, dom))
+
     # --- massa critica
+    provvisoria = domanda_provvisoria(riga)
     out.append("#### Massa critica")
-    if dom >= SOGLIA_MASSA_CRITICA_TON:
+    if dom >= SOGLIA_MASSA_CRITICA_TON and provvisoria:
+        out.append(f"Il volume ipotizzato supera le "
+                   f"{formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno assunte come soglia "
+                   "di sostenibilità economica per un progetto autonomo. **Il confronto non "
+                   "è però concludente**: il fabbisogno da cui deriva poggia su aziende il "
+                   "cui processo produttivo non è stato classificato, quindi non è accertato "
+                   "né che l'idrogeno serva né in quale quantità. La soglia va riverificata "
+                   "dopo il controllo dei codici ATECO presso le imprese, e fino a quel "
+                   "momento nessuna decisione di investimento può appoggiarsi su questo "
+                   "dato.")
+    elif dom >= SOGLIA_MASSA_CRITICA_TON:
         out.append(f"Il volume supera le {formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno "
                    "assunte come soglia di sostenibilità economica per un progetto di "
                    "conversione autonomo, corrispondenti a una flotta di una decina di mezzi "
@@ -2752,33 +3071,65 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
                    "fornitura esterna per usi dimostrativi, e nel medio periodo lavorare "
                    "sull'aggregazione della domanda a scala d'ambito.")
     out.append("")
-    out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
-               f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
-               f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
-               f"idrogeno contro {formatta_numero(EFFICIENZA_DIESEL_KM_LITRO)} km/litro per "
-               "il corrispondente diesel.")
+    # La nota deve dichiarare i parametri effettivamente usati sopra: con una
+    # domanda di solo processo citava autobus e gasolio che non comparivano.
+    if solo_processo:
+        out.append("> Equivalenze calcolate a pari energia utile, con un potere calorifico "
+                   f"inferiore di {formatta_numero(PCI_METANO_KWH_SM3)} kWh per Sm³ di gas "
+                   f"naturale e {formatta_numero(EMISSIONI_METANO_KG_CO2_SM3)} kg di CO2 "
+                   "per Sm³ bruciato; l'idrogeno grigio da reforming è assunto a "
+                   f"{formatta_numero(EMISSIONI_H2_GRIGIO_KG_CO2_KG)} kg di CO2 per kg.")
+    else:
+        out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
+                   f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
+                   f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
+                   f"idrogeno contro {formatta_numero(EFFICIENZA_DIESEL_KM_LITRO)} km/litro "
+                   "per il corrispondente diesel.")
 
     return "\n".join(out)
 
 
-def commento_percorso(riga, codice: str) -> str:
-    """Lettura del singolo percorso, prima delle tabelle."""
+def parti_percorso(riga, codice: str):
+    """Restituisce (premessa, sezioni) del percorso, tenute separate.
+
+    La premessa e' identica per tutti i Comuni: se le sezioni che la seguono sono
+    vuote, il capitolo non ha nulla da dire e non va aperto. Prima le due cose
+    erano concatenate e un percorso senza dati usciva come titolo + tre capoversi
+    di inquadramento, cioe' una sezione promessa dall'indice e priva di numeri.
+    """
     if codice == "A":
-        return testo_percorso_a(riga)
+        premessa = testo_da_template("A00-percorso_intro_it.md", {},
+                                     TESTO_PERCORSO_A_INTRO)
+        sezioni = [sezione_hta(riga), sezione_flotte(riga),
+                   sezione_nicchie(riga), sezione_termico(riga)]
+        ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
+        flotta = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
+        dom = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO",
+                            "T22_FABBISOGNO_H2_TON_ANNO"])
+        sezioni.append(bilancio_domanda(riga, ind, flotta, dom))
+        return premessa, [s for s in sezioni if sostanziale(s)]
 
     if codice == "B":
-        parti = [testo_da_template("B00-percorso_intro_it.md", {},
-                                   TESTO_PERCORSO_B_INTRO),
-                 sezione_aree(riga), sezione_produzione(riga)]
-        return "\n\n".join(p for p in parti if p)
+        premessa = testo_da_template("B00-percorso_intro_it.md", {},
+                                     TESTO_PERCORSO_B_INTRO)
+        sezioni = [sezione_aree(riga), sezione_produzione(riga)]
+        return premessa, [s for s in sezioni if sostanziale(s)]
 
     if codice == "C":
-        parti = [testo_da_template("C00-percorso_intro_it.md", {},
-                                   TESTO_PERCORSO_C_INTRO),
-                 sezione_transito(riga), sezione_hrs(riga)]
-        return "\n\n".join(p for p in parti if p)
+        premessa = testo_da_template("C00-percorso_intro_it.md", {},
+                                     TESTO_PERCORSO_C_INTRO)
+        sezioni = [sezione_transito(riga), sezione_hrs(riga)]
+        return premessa, [s for s in sezioni if sostanziale(s)]
 
-    return ""
+    return "", []
+
+
+def commento_percorso(riga, codice: str) -> str:
+    """Lettura del singolo percorso, prima delle tabelle."""
+    premessa, sezioni = parti_percorso(riga, codice)
+    if not sezioni:
+        return ""
+    return "\n\n".join([p for p in [premessa] + sezioni if p])
 
 
 
@@ -2860,7 +3211,7 @@ def _stato_infrastrutture(riga):
 
     # stoccaggio e trasporto
     snam = numero(riga.get("T27_DISTANZA_SNAM_KM"))
-    if snam is not None:
+    if snam is not None and snam > 0:
         stato = "presente" if snam <= 10 else "lacuna"
         voci.append(("Trasporto della molecola",
                      f"dorsale di trasporto a {formatta_numero(snam)} km; "
@@ -2868,6 +3219,14 @@ def _stato_infrastrutture(riga):
                         if snam <= 10 else
                         "distanza che rende improbabile un collegamento diretto nel "
                         "breve periodo"), stato))
+    elif snam is not None:
+        # Una distanza pari a zero e' quasi sempre un campo non compilato, non un
+        # metanodotto che passa dentro il Comune: letta come caso migliore
+        # produceva uno "Presente" dove invece il dato manca.
+        voci.append(("Trasporto della molecola",
+                     "distanza dalla dorsale indicata come zero: valore da confermare, "
+                     "perché un campo non compilato produce lo stesso risultato",
+                     "lacuna"))
 
     # aree
     area = numero(riga.get("T28_AREA_MINIMA_MQ"))
@@ -3229,7 +3588,7 @@ STRUMENTI_FINANZIAMENTO = [
      "Bandi regionali e nazionali per il rinnovo del trasporto pubblico locale, che "
      "coprono in genere il differenziale rispetto al mezzo convenzionale; Conto Termico "
      "e fondi per la mobilità sostenibile per i mezzi di servizio."),
-    ("Edifici e efficienza",
+    ("Edifici ed efficienza",
      "Conto Termico 3.0 per gli interventi sull'involucro e sui generatori del patrimonio "
      "pubblico; PREPAC per gli immobili della pubblica amministrazione centrale e i "
      "programmi regionali collegati."),
@@ -3247,11 +3606,25 @@ def _sezione_investimento(riga, livello) -> str:
     delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
     connessioni = numero(riga.get("T26_CAPEX_CONNESSIONI_EURO"))
 
-    out = ["### Piano di investimento", "",
-           "Gli importi delle sezioni precedenti sono costi di realizzazione, non impegni "
-           "di bilancio del Comune. Questa sezione li ripartisce per soggetto, indica gli "
-           "strumenti di finanziamento a cui ciascuna componente può accedere e li "
-           "colloca nel tempo.", ""]
+    ha_importi = bool(capex_prod or capex_hrs or (delta_tco and delta_tco > 0))
+
+    out = ["### Piano di investimento", ""]
+    if ha_importi:
+        out += ["Gli importi delle sezioni precedenti sono costi di realizzazione, non "
+                "impegni di bilancio del Comune. Questa sezione li ripartisce per "
+                "soggetto, indica gli strumenti di finanziamento a cui ciascuna "
+                "componente può accedere e li colloca nel tempo.", ""]
+    else:
+        # Senza dati dai tool 2.6 e 2.8 non esiste alcun importo: la frase sopra
+        # rimandava a "importi delle sezioni precedenti" che non c'erano.
+        out += ["Nessuna delle analisi svolte ha prodotto un importo: i moduli che "
+                "dimensionano l'impianto di produzione e la stazione di rifornimento non "
+                "risultano compilati, e il differenziale sulla flotta non è stato "
+                "calcolato. Questa sezione non può quindi ripartire costi fra soggetti: "
+                "indica dove cercare le risorse e come scaglionare la spesa, perché sono "
+                "informazioni utili anche prima di conoscere le cifre.", "",
+                "Il primo importo da determinare è quello dello studio di fattibilità, "
+                "che è anche la sola spesa certa di questo piano nel primo biennio.", ""]
 
     # --- ripartizione per soggetto
     componenti = []
@@ -3260,7 +3633,11 @@ def _sezione_investimento(riga, livello) -> str:
                            "Operatore privato o società mista",
                            "Il Comune conferisce aree, autorizzazioni e domanda; "
                            "l'investimento è di norma a carico di un partner industriale."))
-    if connessioni:
+    # Le connessioni elettriche sono già dentro il CAPEX dell'impianto: il tool 2.6
+    # le restituisce come "di cui". Elencarle come voce autonoma le sommava una
+    # seconda volta e il totale usciva gonfiato (12,14 mln -> 16,16 mln), con il
+    # numero sbagliato proprio nella frase "da portare in Consiglio".
+    if connessioni and not capex_prod:
         componenti.append(("Connessioni elettriche", connessioni,
                            "Titolare dell'impianto",
                            "Costo a carico di chi realizza l'impianto, ma soggetto ai "
@@ -3282,19 +3659,30 @@ def _sezione_investimento(riga, livello) -> str:
         out += ["| Componente | Importo | A carico di |", "| --- | --- | --- |"]
         for nome, importo, soggetto, _ in componenti:
             out.append(f"| {nome} | Euro {formatta_numero(importo)} | {soggetto} |")
+            # riga di dettaglio, non addendo: rientra nell'importo soprastante
+            if nome == "Impianto di produzione" and connessioni:
+                out.append(f"| di cui connessioni elettriche | "
+                           f"Euro {formatta_numero(connessioni)} | "
+                           "Titolare dell'impianto |")
         out.append("")
         quota_comune = sum(i for n, i, s, _ in componenti if s == "Comune")
         totale = sum(i for _, i, _, _ in componenti)
         if totale:
             out.append(f"Sul totale di Euro {formatta_numero(totale)}, la quota "
                        f"riconducibile direttamente al bilancio comunale è di Euro "
-                       f"{formatta_numero(quota_comune)}, pari al "
-                       f"{formatta_numero(quota_comune / totale * 100)}%. "
+                       f"{formatta_numero(quota_comune)}, pari "
+                       f"{percentuale_a(quota_comune / totale * 100)}. "
                        "È il numero da portare in Consiglio: il resto misura la dimensione "
                        "del progetto, non l'impegno dell'ente.")
             out.append("")
         for nome, _, _, nota in componenti:
             out.append(f"**{nome}.** {nota}")
+            out.append("")
+        if connessioni and capex_prod:
+            out.append("**Connessioni elettriche.** Sono comprese nell'investimento "
+                       "dell'impianto, non si sommano a esso. Il costo è di chi realizza "
+                       "l'impianto, ma dipende dai tempi del distributore: va verificato "
+                       "prima di ogni impegno.")
             out.append("")
 
     # --- strumenti di finanziamento
@@ -3353,6 +3741,26 @@ def _sezione_sostenibilita(riga) -> str:
     """Elemento 4: sostenibilità economica e impatto climatico."""
     out = ["### Sostenibilità economica e impatto climatico", ""]
 
+    # Se nessun modulo tecnico ha prodotto numeri, la sezione usciva con il solo
+    # paragrafo sugli obiettivi 2045: un titolo che l'indice prometteva e che il
+    # documento non manteneva. Meglio dirlo.
+    _ha_numeri = any(numero(riga.get(c)) is not None for c in
+                     ("T26_CAPEX_TOTALE_MLN", "T28_CAPEX_COMPLESSIVO_EURO",
+                      "T26_LCOH_EURO_KG", "T26_PAYBACK_ANNI",
+                      "T28_BREAK_EVEN_EURO_KG", "T22_DELTA_TCO_EURO",
+                      "T26_CO2_EVITATA_TON_ANNO", "T22_EMISSIONI_EVITATE_TCO2",
+                      "T24_EMISSIONI_EVITATE_KGCO2_ANNO"))
+    if not _ha_numeri:
+        out += ["La valutazione di sostenibilità economica e climatica richiede i risultati "
+                "dei moduli di calcolo: il costo livellato dell'idrogeno e il tempo di "
+                "ritorno vengono dal tool 2.6, il prezzo di pareggio alla pompa dal tool "
+                "2.8, le emissioni evitate dai tool 2.2 e 2.4. Nessuno di questi risulta "
+                "compilato per il Comune, quindi gli indicatori non sono calcolabili e non "
+                "vengono stimati: una cifra inventata qui si ritroverebbe in una domanda "
+                "di finanziamento.", "",
+                "Resta valido, e indipendente dai dati, il quadro degli obiettivi di lungo "
+                "periodo con cui il piano deve risultare coerente.", ""]
+
     capex_prod = numero(riga.get("T26_CAPEX_TOTALE_MLN"))
     capex_hrs = numero(riga.get("T28_CAPEX_COMPLESSIVO_EURO"))
     lcoh = numero(riga.get("T26_LCOH_EURO_KG"))
@@ -3380,12 +3788,19 @@ def _sezione_sostenibilita(riga) -> str:
         if len(voci_capex) > 1:
             out.append(f"| **Totale** | **Euro {formatta_numero(totale)}** |")
         out.append("")
-        out.append("Gli importi non sono tutti a carico dell'amministrazione: la produzione "
-                   "e la stazione sono investimenti che nella maggior parte dei casi "
-                   "vengono realizzati da operatori privati o da società miste, con il "
-                   "Comune che conferisce aree, autorizzazioni e domanda garantita. Il "
-                   "differenziale sulla flotta è invece interamente pubblico, ed è la voce "
-                   "su cui si concentrano i contributi in conto capitale.")
+        nota = ("Gli importi non sono tutti a carico dell'amministrazione: la produzione "
+                "e la stazione sono investimenti che nella maggior parte dei casi vengono "
+                "realizzati da operatori privati o da società miste, con il Comune che "
+                "conferisce aree, autorizzazioni e domanda garantita.")
+        # La frase sul differenziale di flotta compariva anche dove il 2.2 non era
+        # stato compilato e nessuna flotta era in gioco.
+        if delta_tco and delta_tco > 0:
+            nota += (" Il differenziale sulla flotta è invece interamente pubblico, ed è "
+                     "la voce su cui si concentrano i contributi in conto capitale.")
+        else:
+            nota += (" Nessuna voce di questo quadro grava direttamente sul bilancio "
+                     "comunale: il contributo dell'ente è in aree, atti e tempi.")
+        out.append(nota)
         out.append("")
 
     # --- costi di esercizio e ritorno
@@ -3495,8 +3910,31 @@ def _sezione_sostenibilita(riga) -> str:
     return "\n".join(out)
 
 
+def normalizza_uscita(testo: str) -> str:
+    """Ultima rete di sicurezza prima del renderer.
+
+    Il renderer rende **grassetto** ma non *corsivo*, e non interpreta i
+    backtick: un asterisco singolo o un nome di colonna fra apici inversi
+    arrivavano stampati tali e quali nel documento consegnato al Comune. Qui
+    passa tutto il testo generato, non solo quello che viene dai file .md, cosi'
+    la svista non si ripresenta in una stringa scritta a mano piu' avanti.
+    """
+    if not testo:
+        return testo
+    testo = re.sub(r"`([^`\n]+)`", r"\1", testo)
+    testo = re.sub(r"(?<![\*\w])\*(?!\*)([^\*\n]{1,160}?)(?<![\*\s])\*(?!\*)",
+                   r"**\1**", testo)
+    return testo
+
+
 def costruisci_contenuti(riga, livello, profilo, punteggi) -> dict:
     profilo_file = f"4-profilo_{profilo}_it.md" if profilo else ""
+    return {k: (normalizza_uscita(v) if isinstance(v, str) else v)
+            for k, v in _contenuti_grezzi(riga, livello, profilo,
+                                          punteggi, profilo_file).items()}
+
+
+def _contenuti_grezzi(riga, livello, profilo, punteggi, profilo_file) -> dict:
     return {
         "livello": livello,
         "profilo": profilo,
@@ -3508,15 +3946,29 @@ def costruisci_contenuti(riga, livello, profilo, punteggi) -> dict:
         "profilo_intro": leggi_md("4-profilo_intro_it.md"),
         "profilo_calcolato": testo_profilo(profilo, punteggi),
         "profilo_dettaglio": leggi_md(profilo_file) if profilo else "",
-        "passo2": testo_passo2(riga),
-        "passo3": testo_piano(riga, livello, profilo),
+        "passo2": testo_passo2(riga, profilo),
+        "passo3": _passo3_con_allegato(riga, livello, profilo),
     }
+
+
+# Il quadro normativo nazionale e regionale occupava le prime sette pagine: il
+# Comune apriva il documento e trovava PNIEC, Strategia FVG e ruolo dei Comuni
+# prima del proprio nome. Lo stesso testo, invariato, va in chiusura come
+# allegato: serve a motivare le scelte in sede istituzionale, non a introdurle.
+FILE_ALLEGATO_QUADRO = "9-allegato_quadro_it.md"
+
+
+def _passo3_con_allegato(riga, livello, profilo) -> str:
+    piano = testo_piano(riga, livello, profilo)
+    if not os.path.exists(FILE_ALLEGATO_QUADRO):
+        return piano
+    return piano + "\n\n<<<PAGINA>>>\n\n" + leggi_md(FILE_ALLEGATO_QUADRO)
 
 
 def file_attesi(livello, profilo):
     attesi = ["1-intro_it.md", "2-struttura_plan_it.md", "3-maturita_intro_it.md",
               f"3-maturita_{livello}_it.md", "4-profilo_intro_it.md",
-              "5-percorsi_intro_it.md"]
+              "5-percorsi_intro_it.md", FILE_ALLEGATO_QUADRO]
     if profilo:
         attesi.append(f"4-profilo_{profilo}_it.md")
     return attesi
