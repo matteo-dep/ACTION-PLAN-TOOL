@@ -1,3 +1,3 @@
-RISULTATO: *Profilo Strategico AC - Distretto Multimodale*  
+RISULTATO: **Profilo Strategico AC - Distretto Multimodale**  
 
 L'identificazione del profilo AC evidenzia una realtà territoriale dove una forte domanda industriale si innesta su un nodo logistico di importanza strategica. Tale configurazione richiede l'attivazione dei Percorsi A e C, focalizzando l'attenzione su come la logistica di transito possa alimentare stabilmente i consumi del tessuto industriale locale. Seguire questi percorsi implica analizzare la possibilità di intercettare flussi di idrogeno in transito per soddisfare il fabbisogno dei settori Hard-to-Abate, riducendo la dipendenza da impianti di produzione locale isolati. La strategia mira a creare un polo industriale multimodale dove la disponibilità di molecola garantita dalle grandi infrastrutture di trasporto diventi un fattore di competitività e attrazione per nuove realtà produttive.

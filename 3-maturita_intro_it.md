@@ -1,4 +1,4 @@
-#Analisi della Maturità Istituzionale e Visione Strategica  
+# Analisi della Maturità Istituzionale e Visione Strategica  
 
 La determinazione del grado di maturità istituzionale costituisce il pilastro analitico su cui poggia l'intera architettura dell'Action Plan. Non si tratta di una semplice misurazione statistica, ma di una valutazione multidimensionale della capacità dell’Ente di governare le variabili tecniche, normative e finanziarie che caratterizzano la filiera dell'idrogeno. Attraverso l'elaborazione del punteggio ottenuto nel modulo di autovalutazione, il Toolkit calibra la profondità delle analisi e la complessità delle proposte operative, garantendo che la strategia sia rigorosamente proporzionata alle reali risorse amministrative e alla capacità di assorbimento tecnologico del territorio.
 
