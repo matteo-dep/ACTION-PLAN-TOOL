@@ -25,6 +25,7 @@ chi apre il generatore direttamente.
 """
 
 import os
+from datetime import datetime
 
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
@@ -79,6 +80,16 @@ T = {
         "it": "Colonne obbligatorie assenti: {c}",
         "en": "Required columns missing: {c}",
         "sl": "Manjkajo obvezni stolpci: {c}",
+    },
+    "ricarica": {
+        "it": "🔄 Rileggi i dati dal foglio",
+        "en": "🔄 Reload the data from the sheet",
+        "sl": "🔄 Ponovno naloži podatke iz lista",
+    },
+    "letto_alle": {
+        "it": "Dati letti alle {o}",
+        "en": "Data read at {o}",
+        "sl": "Podatki prebrani ob {o}",
     },
     "campo_id": {
         "it": "Codice identificativo del Comune",
@@ -172,7 +183,10 @@ def TT(chiave, **valori):
 # ==========================================================================
 # LETTURA DEL FOGLIO
 # ==========================================================================
-@st.cache_data(ttl=120, show_spinner=True)
+# ttl breve: durante una presentazione capita di correggere un valore nel
+# foglio e rigenerare subito. Con un ttl lungo il documento esce con i dati di
+# qualche minuto prima e sembra rotto, senza che nulla lo segnali.
+@st.cache_data(ttl=30, show_spinner=True)
 def carica_dati():
     conn = st.connection("gsheets", type=GSheetsConnection)
     kwargs = {"ttl": 0}
@@ -190,7 +204,7 @@ def carica_dati():
         kwargs["spreadsheet"] = SPREADSHEET_URL
     df = conn.read(**kwargs)
     df.columns = [str(c).strip() for c in df.columns]
-    return df.dropna(how="all")
+    return df.dropna(how="all"), datetime.now()
 
 
 # ==========================================================================
@@ -204,11 +218,19 @@ st.markdown(
     unsafe_allow_html=True)
 st.write("")
 
+if st.sidebar.button(TT("ricarica"), use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
+
 try:
-    df = carica_dati()
+    df, letto_alle = carica_dati()
 except Exception as e:
     st.error(f"{TT('err_foglio')}\n\n{e}")
     st.stop()
+
+# Rendere visibile il momento della lettura: cosi' una discrepanza col foglio
+# si riconosce a colpo d'occhio invece di sembrare un errore del generatore.
+st.sidebar.caption(TT("letto_alle").format(o=letto_alle.strftime("%H:%M:%S")))
 
 mancanti = [c for c in (C.COL_ID, C.COL_NOME, C.COL_MATURITA) if c not in df.columns]
 if mancanti:

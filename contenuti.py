@@ -549,10 +549,18 @@ def vero(valore) -> bool:
 
 
 def livello_maturita(score: int) -> str:
+    """Livello di maturita' dal punteggio del questionario 1.1.
+
+    Il ripiego e' L0, non L1: un punteggio sotto SOGLIA_MINIMA non e' un
+    livello basso, e' assenza di livello. Con il ripiego a L1 la pagina si
+    contraddiceva da sola, scrivendo "Maturita' 2 (L1)" e subito sotto
+    "Comune in Livello 0", e lo stesso Comune risultava L1 nel toolkit e L0
+    nell'Action Plan. Le soglie qui sopra sono le stesse di h2ready.py.
+    """
     for lo, hi, lab in SOGLIE_MATURITA:
         if lo <= score <= hi:
             return lab
-    return "L1"
+    return "L0"
 
 
 def calcola_profilo(riga):
