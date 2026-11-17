@@ -5,6 +5,7 @@ Questo è il file da modificare per lavorare sui CONTENUTI:
 mappatura delle colonne, etichette, testi dei percorsi e dell'analisi incrociata.
 """
 
+import math
 import os
 import re
 import unicodedata
@@ -512,7 +513,11 @@ def numero(v):
 def formatta_numero(n: float) -> str:
     if abs(n - round(n)) < 1e-9 and abs(n) < 1e15:
         return f"{int(round(n)):,}".replace(",", ".")
-    return f"{n:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+    testo = f"{n:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+    # Lo zero finale e' rumore e finisce ovunque: "59,50%", "3,50 km/litro",
+    # "2,50 MW". Non aggiunge informazione e suggerisce una precisione al
+    # centesimo che il dato non ha. Si toglie qui, una volta per tutte.
+    return testo[:-1] if testo.endswith("0") else testo
 
 
 def _forma_articolo(testo: str) -> str:
@@ -524,6 +529,54 @@ def _forma_articolo(testo: str) -> str:
             or testo.startswith("1,") or testo.startswith("8"):
         return "l'"                                    # otto, uno, undici
     return "il"
+
+
+def arrotonda(n, cifre=2):
+    """Arrotonda a un numero dato di cifre significative."""
+    if not n:
+        return n
+    esponente = math.floor(math.log10(abs(n)))
+    passo = 10 ** (esponente - cifre + 1)
+    return round(n / passo) * passo
+
+
+def circa(n, cifre=None) -> str:
+    """Il numero come ordine di grandezza, per la prosa.
+
+    I Comuni pilota hanno chiesto all'unanimita' «stime e ordini di grandezza
+    idonei a orientare le decisioni strategiche». Il documento rispondeva con
+    due decimali su tutto: un LCOH di 11,82 €/kg e' l'uscita di una simulazione
+    con un'incertezza larga, e scriverlo cosi' e' una promessa di precisione che
+    il modello non puo' mantenere.
+
+    Senza `cifre`, la regola e' calibrata per non contraddire le tabelle, che
+    restano a precisione piena: sotto cento si arrotonda a due cifre
+    significative (11,82 -> 12), da cento in su all'intero (175 resta 175,
+    113,81 diventa 114). Arrotondare 175 a 180 sarebbe peggio del problema di
+    partenza, perche' il lettore trova due numeri diversi nella stessa pagina.
+    """
+    if not n:
+        return formatta_numero(n or 0)
+    if cifre is not None:
+        return formatta_numero(arrotonda(n, cifre))
+    if abs(n) < 100:
+        return formatta_numero(arrotonda(n, 2))
+    return formatta_numero(round(n))
+
+
+def decimale(n, cifre=1) -> str:
+    """Un decimale senza lo zero di troppo: 7,2 e non 7,20."""
+    testo = f"{round(float(n), cifre):.{cifre}f}".replace(".", ",")
+    return testo.rstrip("0").rstrip(",") if "," in testo else testo
+
+
+def giornate(mezze: int) -> str:
+    """Mezze giornate in parole: '1 giornata e mezza', non '1,50 giornate'."""
+    intere, resto = divmod(int(mezze), 2)
+    if intere == 0:
+        return "mezza giornata"
+    testo = "1 giornata" if intere == 1 else f"{intere} giornate"
+    return testo + (" e mezza" if resto else "")
 
 
 def percentuale(n: float) -> str:
@@ -1257,7 +1310,7 @@ def sezione_flotte(riga) -> str:
         bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
         if fabbisogno >= SOGLIA_MASSA_CRITICA_TON:
             out.append(f"Con {formatta_numero(kg_giorno)} kg al giorno — l'equivalente di "
-                       f"circa {formatta_numero(bus_eq)} autobus urbani in servizio — la "
+                       f"circa {circa(bus_eq, 1)} autobus urbani in servizio — la "
                        "flotta raggiunge la scala che rende sostenibile **un impianto di "
                        "rifornimento presso il proprio deposito**. È la configurazione più "
                        "favorevole: i mezzi rientrano ogni sera, il rifornimento avviene in "
@@ -1586,7 +1639,7 @@ def sinergia_depuratore(riga) -> str:
     out.append(f"Dimensionando l'elettrolizzatore sul fabbisogno di ossigeno delle vasche "
                f"si otterrebbero circa **{formatta_numero(round(h2_anno / 1000))} tonnellate "
                f"di idrogeno all'anno**, sufficienti ad alimentare l'equivalente di "
-               f"{formatta_numero(bus)} autobus urbani. L'ossigeno smetterebbe di essere un "
+               f"{circa(bus, 1)} autobus urbani. L'ossigeno smetterebbe di essere un "
                "sottoprodotto da disperdere e diventerebbe il reagente che oggi si paga "
                "sotto forma di energia per la compressione dell'aria.")
     out.append("")
@@ -1746,10 +1799,10 @@ def sezione_termico(riga) -> str:
             out.append("")
             out.append("#### Effetto del clima")
             out.append(f"Il confronto sopra assume un coefficiente di prestazione stagionale "
-                       f"di {formatta_numero(COP_POMPA_CALORE)}, valore corrente in pianura. "
+                       f"di {decimale(COP_POMPA_CALORE)}, valore corrente in pianura. "
                        f"In zona climatica F, con temperature di progetto sotto i -5 °C, la "
                        f"stessa macchina scende attorno a "
-                       f"{formatta_numero(COP_POMPA_CALORE_MONTAGNA)}: il vantaggio "
+                       f"{decimale(COP_POMPA_CALORE_MONTAGNA)}: il vantaggio "
                        f"sull'idrogeno resta netto ({formatta_numero(rapporto_freddo)} volte), "
                        f"ma il fabbisogno elettrico sale a "
                        f"{formatta_numero(round(elettrico_pdc_freddo))} kWh/anno, con una "
@@ -1762,11 +1815,11 @@ def sezione_termico(riga) -> str:
                        "distributore la capacità disponibile nelle ore critiche.")
             out.append("")
             out.append("> Confronto condotto con un potere calorifico di "
-                       f"{formatta_numero(PCI_H2_KWH_KG)} kWh/kg, un rendimento di caldaia "
+                       f"{decimale(PCI_H2_KWH_KG)} kWh/kg, un rendimento di caldaia "
                        f"del {formatta_numero(RENDIMENTO_CALDAIA_H2 * 100)}%, un consumo di "
                        f"elettrolisi di {formatta_numero(CONSUMO_ELETTROLISI_KWH_KG)} kWh/kg "
                        f"e un coefficiente di prestazione stagionale di "
-                       f"{formatta_numero(COP_POMPA_CALORE)} per la pompa di calore.")
+                       f"{decimale(COP_POMPA_CALORE)} per la pompa di calore.")
             out.append("")
 
     # --- esito dello strumento
@@ -1951,7 +2004,7 @@ def sezione_aree(riga) -> str:
         if programmabili:
             righe.append(f"| di cui fonti programmabili | {formatta_numero(programmabili)} MW |")
         if cap_rete is not None:
-            righe.append(f"| Capacità residua di rete | {formatta_numero(cap_rete)} MW |")
+            righe.append(f"| Capacità residua di rete | {decimale(cap_rete)} MW |")
         if distanza is not None:
             righe.append(f"| Distanza dalla cabina primaria | {formatta_numero(distanza)} km |")
         if not is_vuoto(riga.get("T25_ENTRO_5KM_DORSALE")):
@@ -2093,7 +2146,7 @@ def sezione_produzione(riga) -> str:
         if curtail is not None:
             righe.append(f"| Energia rinnovabile non utilizzata | {formatta_numero(curtail)}% |")
         if copertura is not None:
-            righe.append(f"| Copertura del fabbisogno | {formatta_numero(copertura)}% |")
+            righe.append(f"| Copertura del fabbisogno | {decimale(copertura)}% |")
         out += ["| Grandezza | Valore |", "| --- | --- |"] + righe + [""]
 
     # --- conformità RFNBO
@@ -2152,21 +2205,21 @@ def sezione_produzione(riga) -> str:
 
         if lcoh is not None:
             if lcoh <= LCOH_COMPETITIVO:
-                out.append(f"Un costo di produzione di Euro {formatta_numero(lcoh)} al "
+                out.append(f"Un costo di produzione di circa Euro {circa(lcoh)} al "
                            "chilogrammo colloca il progetto nella fascia competitiva del "
                            "mercato europeo dell'idrogeno rinnovabile. La sostenibilità "
                            "non dipende quindi da un contributo permanente, ma dalla "
                            "capacità di contrattualizzare i volumi: senza acquirenti "
                            "impegnati, un buon costo di produzione non basta.")
             elif lcoh <= LCOH_CRITICO:
-                out.append(f"Il costo di Euro {formatta_numero(lcoh)} al chilogrammo si "
+                out.append(f"Il costo, intorno a Euro {circa(lcoh)} al chilogrammo, si "
                            "colloca nella fascia intermedia. Il progetto regge se assistito "
                            "da un contributo in conto capitale che riduca il peso "
                            "dell'ammortamento, oppure se l'idrogeno viene venduto a "
                            "utilizzatori che ne hanno un obbligo normativo e per i quali "
                            "l'alternativa è una sanzione, non un combustibile più economico.")
             else:
-                out.append(f"Il costo di Euro {formatta_numero(lcoh)} al chilogrammo è "
+                out.append(f"Il costo, intorno a Euro {circa(lcoh)} al chilogrammo, è "
                            "**fuori mercato** rispetto ai riferimenti europei attuali. La "
                            "configurazione va rivista prima di procedere: nella maggior "
                            "parte dei casi la causa è un elettrolizzatore che lavora poche "
@@ -2175,7 +2228,7 @@ def sezione_produzione(riga) -> str:
             out.append("")
 
         if payback is not None and payback > PAYBACK_ACCETTABILE_ANNI:
-            out.append(f"Il tempo di ritorno di {formatta_numero(payback)} anni eccede "
+            out.append(f"Un tempo di ritorno dell'ordine di {circa(payback)} anni eccede "
                        "l'orizzonte che un'amministrazione può assumere senza un partner "
                        "industriale. È il segnale che il progetto va costruito come "
                        "partenariato pubblico-privato, con il Comune che conferisce aree e "
@@ -2204,11 +2257,10 @@ def sezione_produzione(riga) -> str:
                              "com'è: va ridotta la quota a terra a favore delle coperture, "
                              "oppure esteso il perimetro oltre i confini comunali.")
         elif quota > QUOTA_SUOLO_ATTENZIONE_PERC:
-            verifiche.append(f"L'impianto occuperebbe il {formatta_numero(quota)}% delle "
-                             "superfici a terra disponibili. È una quota che rende il "
-                             "consumo di suolo un tema di discussione pubblica: conviene "
-                             "affrontarlo nel percorso partecipativo prima che diventi "
-                             "un'opposizione in fase autorizzativa.")
+            verifiche.append(f"L'impianto occuperebbe {percentuale(arrotonda(quota))} "
+                             "delle superfici a terra disponibili: il consumo di suolo "
+                             "diventa un tema da affrontare apertamente già in fase di "
+                             "progetto.")
 
     if verifiche:
         out.append("#### Verifiche di coerenza con il territorio")
@@ -2892,7 +2944,7 @@ def saldo_domanda_offerta(riga, dom) -> str:
            f"| Produzione simulata (percorso B) | {formatta_numero(prod)} t/anno |",
            f"| Saldo | {'+' if saldo >= 0 else '-'}"
            f"{formatta_numero(abs(saldo))} t/anno |",
-           f"| Copertura della domanda | {formatta_numero(copertura)}% |", ""]
+           f"| Copertura della domanda | {decimale(copertura)}% |", ""]
 
     if saldo < 0:
         out.append(f"La produzione locale copre {percentuale(copertura)} della domanda: "
@@ -3022,7 +3074,7 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
     else:
         righe_eq += [
             f"| Equivalente in autobus urbani alimentabili | "
-            f"{formatta_numero(bus_eq)} mezzi |",
+            f"circa {circa(bus_eq, 1)} mezzi |",
             f"| Gasolio sostituito | {formatta_numero(litri)} litri/anno |",
             f"| Emissioni evitate al netto della produzione | "
             f"{formatta_numero(co2)} tCO2/anno |"]
@@ -3057,7 +3109,7 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
     if quota_rfnbo is None:
         out.append("> **Le emissioni evitate sono calcolate nell'ipotesi peggiore**, cioè "
                    "idrogeno prodotto con elettricità di rete non certificata: in quel caso "
-                   f"ogni chilogrammo ne costa {formatta_numero(emissioni_h2(None))} di CO2, "
+                   f"ogni chilogrammo ne costa {decimale(emissioni_h2(None))} di CO2, "
                    "più dell'idrogeno da metano. Il percorso B, se sviluppato, restituisce "
                    "la quota effettivamente conforme ai criteri RFNBO e il bilancio va "
                    "ricalcolato su quella.")
@@ -3123,15 +3175,15 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
     # domanda di solo processo citava autobus e gasolio che non comparivano.
     if solo_processo:
         out.append("> Equivalenze calcolate a pari energia utile, con un potere calorifico "
-                   f"inferiore di {formatta_numero(PCI_METANO_KWH_SM3)} kWh per Sm³ di gas "
+                   f"inferiore di {decimale(PCI_METANO_KWH_SM3)} kWh per Sm³ di gas "
                    f"naturale e {formatta_numero(EMISSIONI_METANO_KG_CO2_SM3)} kg di CO2 "
                    "per Sm³ bruciato; l'idrogeno grigio da reforming è assunto a "
-                   f"{formatta_numero(EMISSIONI_H2_GRIGIO_KG_CO2_KG)} kg di CO2 per kg.")
+                   f"{decimale(EMISSIONI_H2_GRIGIO_KG_CO2_KG)} kg di CO2 per kg.")
     else:
         out.append("> Equivalenze calcolate con i parametri di riferimento nazionali: "
                    f"{formatta_numero(CONSUMO_BUS_KG_GIORNO)} kg/giorno per autobus urbano, "
-                   f"{formatta_numero(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
-                   f"idrogeno contro {formatta_numero(EFFICIENZA_DIESEL_KM_LITRO)} km/litro "
+                   f"{decimale(EFFICIENZA_H2_KM_KG)} km/kg per il mezzo pesante a "
+                   f"idrogeno contro {decimale(EFFICIENZA_DIESEL_KM_LITRO)} km/litro "
                    "per il corrispondente diesel.")
 
     return "\n".join(out)
@@ -3467,6 +3519,71 @@ def _sezione_cronoprogramma(riga, livello, profilo) -> str:
             out.append(f"**{nome}.** {testo}")
             out.append("")
 
+    out.append(_sezione_impegno_comune(riga, livello, profilo))
+    return "\n".join(out)
+
+
+def _sezione_impegno_comune(riga, livello, profilo) -> str:
+    """Quante giornate di lavoro costa al Comune il primo anno di questo piano.
+
+    È la voce che non compare in nessun quadro economico e che decide se il
+    piano parte: fra i Comuni pilota la carenza di personale è l'ostacolo
+    indicato più spesso, molto prima delle risorse finanziarie. Dire cosa fare
+    senza dire quanto tempo costa lascia la decisione senza il dato che serve.
+    """
+    mancanti = questionari_mancanti(riga)
+    cap_nota = numero(riga.get("T25_CAPACITA_RESIDUA_MW")) is not None
+    ha_area = numero(riga.get("T28_AREA_MINIMA_MQ")) or numero(riga.get("T26_CAPEX_TOTALE_MLN"))
+
+    # (attività, mezze giornate, chi, delegabile a)
+    voci = []
+    if mancanti:
+        mezze = max(1, round(len(mancanti) * 0.8))
+        voci.append((f"Completare i {len(mancanti)} questionari mancanti", mezze,
+                     "Ufficio tecnico",
+                     "Consulente, oppure supporto tecnico regionale"))
+    if not cap_nota:
+        voci.append(("Richiedere al distributore la capacità residua di rete", 1,
+                     "Ufficio tecnico", "Non delegabile: va chiesta dall'ente"))
+    voci.append(("Diagnosi energetica degli edifici pubblici", 1,
+                 "Ufficio tecnico, per il solo affidamento",
+                 "ESCO o professionista: la spesa è coperta dal Conto Termico"))
+    if ha_area:
+        voci.append(("Individuazione dell'area e verifica urbanistica", 3,
+                     "Ufficio tecnico",
+                     "Non delegabile: è competenza esclusivamente comunale"))
+    if livello != "L1":
+        voci.append(("Manifestazione di interesse verso operatori e aziende", 2,
+                     "Ufficio tecnico con la parte politica",
+                     "Agenzia per l'energia, consorzio industriale, Regione"))
+        voci.append(("Delibera di indirizzo e passaggio in Giunta", 2,
+                     "Segreteria con l'ufficio tecnico", "Non delegabile"))
+    if "B" in (profilo or "") or "C" in (profilo or ""):
+        voci.append(("Confronto con i Comuni limitrofi per l'aggregazione", 2,
+                     "Parte politica", "Agenzia per l'energia o Unione dei Comuni"))
+
+    totale = sum(m for _, m, _, _ in voci)
+    delegabili = sum(m for _, m, _, d in voci if not d.startswith("Non delegabile"))
+
+    out = ["", "#### Che cosa costa al Comune, in tempo", "",
+           "Il quadro finanziario indica chi paga le opere. Questa tabella indica l'altra "
+           "risorsa che il piano consuma, e che non compare da nessuna parte: le ore del "
+           "personale comunale. Le stime sono prudenziali e riferite al **primo anno**.", "",
+           "| Attività | Impegno | Chi | Delegabile a |", "| --- | --- | --- | --- |"]
+    for nome, mezze, chi, deleg in voci:
+        out.append(f"| {nome} | {giornate(mezze)} | {chi} | {deleg} |")
+    out.append("")
+
+    out.append(f"**In totale, dell'ordine di {giornate(totale)} nel "
+               f"primo anno**, di cui {giornate(delegabili)} affidabili "
+               "all'esterno. Resta in capo all'ente ciò che nessun altro può fare al suo "
+               "posto: chiedere la capacità di rete, individuare l'area, deliberare.")
+    out.append("")
+    out.append("Se questo impegno eccede la disponibilità reale degli uffici, la risposta "
+               "non è rinunciare al piano ma spostarne il peso. Le vie già disponibili "
+               "sono tre: l'assistenza tecnica regionale agli enti locali, la diagnosi "
+               "energetica finanziata fino all'intero costo, e l'aggregazione con i "
+               "Comuni vicini, che divide lo stesso lavoro istruttorio su più uffici.")
     return "\n".join(out)
 
 
@@ -4141,12 +4258,12 @@ def _sezione_sostenibilita(riga) -> str:
         out += ["| Indicatore | Valore |", "| --- | --- |"] + righe + [""]
         if payback is not None:
             if payback <= PAYBACK_ACCETTABILE_ANNI:
-                out.append(f"Un ritorno in {formatta_numero(payback)} anni rientra "
+                out.append(f"Un ritorno dell'ordine di {circa(payback)} anni rientra "
                            "nell'orizzonte di un investimento infrastrutturale ordinario "
                            "ed è compatibile con la durata delle concessioni e dei "
                            "contratti di acquisto pluriennali.")
             else:
-                out.append(f"Un ritorno in {formatta_numero(payback)} anni eccede "
+                out.append(f"Un ritorno dell'ordine di {circa(payback)} anni eccede "
                            "l'orizzonte che un'amministrazione può assumere da sola. Non "
                            "rende il progetto irrealizzabile, ma ne determina la forma: "
                            "serve un partner industriale che porti capitale e gestione, "
@@ -4181,7 +4298,7 @@ def _sezione_sostenibilita(riga) -> str:
             costo_ton = totale / (totale_co2 * anni)
             out.append(f"Rapportando l'investimento complessivo alle emissioni evitate su "
                        f"un orizzonte di {anni} anni, il costo della tonnellata di CO2 "
-                       f"evitata risulta di **Euro {formatta_numero(costo_ton)}**.")
+                       f"evitata è dell'ordine di **Euro {circa(costo_ton)}**.")
             out.append("")
             if costo_ton <= 100:
                 out.append("È un valore che regge il confronto con qualunque altra misura "
@@ -4299,8 +4416,8 @@ def _verdetto_sintesi(riga, livello, profilo, dom, prod) -> str:
                 "uno studio di fattibilità su un'ipotesi che potrebbe non reggere.")
 
     if dom and not prod:
-        testo = (f"**Sul territorio esiste una domanda potenziale di "
-                 f"{formatta_numero(dom)} tonnellate di idrogeno all'anno**, ma non è "
+        testo = (f"**Sul territorio esiste una domanda potenziale di circa "
+                 f"{circa(dom)} tonnellate di idrogeno all'anno**, ma non è "
                  "ancora stato verificato dove e a che costo produrle. È la verifica "
                  "che decide tutto il resto: senza, la domanda resta un numero che non "
                  "si può né contrattualizzare né finanziare.")
@@ -4317,7 +4434,7 @@ def _verdetto_sintesi(riga, livello, profilo, dom, prod) -> str:
         return testo
 
     if prod and not dom:
-        return (f"**Il territorio potrebbe produrre circa {formatta_numero(prod)} "
+        return (f"**Il territorio potrebbe produrre circa {circa(prod)} "
                 "tonnellate di idrogeno all'anno, ma non risulta chi le comprerebbe.** "
                 "È la configurazione più rischiosa: un impianto senza acquirente "
                 "contrattualizzato lavora a carico parziale e il costo del chilogrammo "
@@ -4327,16 +4444,16 @@ def _verdetto_sintesi(riga, livello, profilo, dom, prod) -> str:
     saldo = prod - dom
     if saldo < 0:
         testo = (f"**Domanda e produzione sono entrambe quantificate, e non si "
-                 f"coprono.** Il territorio consumerebbe {formatta_numero(dom)} "
-                 f"tonnellate all'anno e ne produrrebbe {formatta_numero(prod)}: "
-                 f"{percentuale(copertura)} del fabbisogno, con "
-                 f"**{formatta_numero(abs(saldo))} tonnellate da approvvigionare fuori "
+                 f"coprono.** Il territorio consumerebbe circa {circa(dom)} "
+                 f"tonnellate all'anno e ne produrrebbe {circa(prod)}: "
+                 f"{percentuale(arrotonda(copertura))} del fabbisogno, con "
+                 f"**{circa(abs(saldo))} tonnellate da approvvigionare fuori "
                  "dal territorio comunale**. È il numero che giustifica l'aggregazione "
                  "sovracomunale: da soli, quella quota si compra sul mercato a prezzi "
                  "su cui l'ente non ha alcuna leva.")
     elif saldo > 0:
-        testo = (f"**La produzione ipotizzata eccede la domanda locale** di "
-                 f"{formatta_numero(saldo)} tonnellate all'anno. L'eccedenza non è un "
+        testo = (f"**La produzione ipotizzata eccede la domanda locale** di circa "
+                 f"{circa(saldo)} tonnellate all'anno. L'eccedenza non è un "
                  "margine di sicurezza ma un rischio: serve un acquirente esterno "
                  "contrattualizzato prima della costruzione, oppure l'impianto va "
                  "ridimensionato.")
@@ -4412,21 +4529,21 @@ def sintesi_esecutiva(riga, livello, profilo, punteggi) -> str:
     # ------------------------------------------------------------ i numeri
     righe = []
     if dom:
-        righe.append(f"| Domanda potenziale di idrogeno | {formatta_numero(dom)} t/anno |")
+        righe.append(f"| Domanda potenziale di idrogeno | {circa(dom)} t/anno |")
     if prod:
-        righe.append(f"| Produzione locale ipotizzata | {formatta_numero(prod)} t/anno |")
+        righe.append(f"| Produzione locale ipotizzata | {circa(prod)} t/anno |")
     if dom and prod:
         righe.append(f"| Copertura del fabbisogno | "
-                     f"{formatta_numero(prod / dom * 100)}% |")
+                     f"{circa(prod / dom * 100)}% |")
     sup = sum(numero(riga.get(c)) or 0 for c in
               ("T25_SUP_BROWNFIELD_MQ", "T25_SUP_INCOLTE_MQ", "T25_SUP_SAU_MQ",
                "T25_SUP_SERVITU_MQ"))
     if sup:
         righe.append(f"| Superfici a terra disponibili | "
-                     f"{formatta_numero(sup / 10000)} ha |")
+                     f"{decimale(sup / 10000)} ha |")
     cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
     if cap_rete:
-        righe.append(f"| Capacità residua di rete | {formatta_numero(cap_rete)} MW |")
+        righe.append(f"| Capacità residua di rete | {decimale(cap_rete)} MW |")
 
     componenti, _ = componenti_investimento(riga)
     if componenti:
@@ -4528,11 +4645,149 @@ def _contenuti_grezzi(riga, livello, profilo, punteggi, profilo_file) -> dict:
 FILE_ALLEGATO_QUADRO = "9-allegato_quadro_it.md"
 
 
+def _sezione_eredita(riga) -> str:
+    """Che cosa resta al Comune anche se l'idrogeno non si fa.
+
+    In apertura il documento promette che l'analisi vale comunque. È una delle
+    cose migliori che dice, ma resta una promessa generica. Qui la promessa
+    viene mantenuta con i dati effettivamente raccolti per questo Comune, e
+    conta: nessuno dei Comuni pilota mette l'idrogeno fra le proprie priorità,
+    e ciò che hanno indicato come urgente — efficientamento degli edifici,
+    fotovoltaico, parco mezzi — è esattamente ciò che queste rilevazioni
+    servono.
+    """
+    beni = []
+
+    sup = sum(numero(riga.get(c)) or 0 for c in
+              ("T25_SUP_BROWNFIELD_MQ", "T25_SUP_INCOLTE_MQ", "T25_SUP_SAU_MQ",
+               "T25_SUP_SERVITU_MQ"))
+    tetti = (numero(riga.get("T25_SUP_TETTI_CIV_MQ")) or 0) + \
+            (numero(riga.get("T25_SUP_TETTI_IND_MQ")) or 0)
+    if sup or tetti:
+        voce = "La mappa delle superfici su cui il territorio può produrre energia: "
+        parti = []
+        if sup:
+            parti.append(f"{decimale(sup / 10000)} ettari a terra")
+        if tetti:
+            parti.append(f"{circa(tetti)} m² di coperture")
+        beni.append((" e ".join(parti).capitalize() + " già censiti e qualificati",
+                     "Serve per il PAESC, per una comunità energetica rinnovabile e per "
+                     "qualunque candidatura su bandi fotovoltaici: è la parte più lenta "
+                     "di quelle istruttorie, ed è fatta."))
+
+    cap = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
+    if cap:
+        beni.append((f"La capacità residua del nodo di rete, pari a "
+                     f"{decimale(cap)} MW",
+                     "È il vincolo che determina quanta potenza rinnovabile il territorio "
+                     "può effettivamente connettere, a prescindere dalla tecnologia. "
+                     "Averla verificata evita di progettare impianti che la rete non "
+                     "accetterebbe."))
+
+    term = numero(riga.get("T24_FABBISOGNO_TERMICO_KWH_ANNO"))
+    if term:
+        beni.append((f"Il fabbisogno termico del patrimonio edilizio pubblico, "
+                     f"{circa(term / 1000)} MWh all'anno",
+                     "È il dato di partenza per il Conto Termico e per qualunque "
+                     "intervento di efficientamento, che è la voce indicata più spesso "
+                     "come prioritaria dalle amministrazioni."))
+
+    veicoli = numero(riga.get("T22_N_VEICOLI_ANALIZZATI"))
+    if veicoli:
+        beni.append((f"L'analisi del costo totale di possesso su "
+                     f"{formatta_numero(veicoli)} mezzi della flotta comunale",
+                     "Vale per qualunque scelta di alimentazione: dice quali mezzi "
+                     "conviene elettrificare, quali tenere a gasolio fino al fine vita e "
+                     "quali non hanno alternativa. È utilizzabile alla prossima gara."))
+
+    aziende = numero(riga.get("T21_N_AZIENDE_IDONEE"))
+    if aziende:
+        beni.append((f"Il censimento dei processi energivori sul territorio, "
+                     f"{formatta_numero(aziende)} aziende",
+                     "Identifica dove si concentrano i consumi industriali e quali "
+                     "processi sono elettrificabili: è la base per un dialogo con le "
+                     "imprese che prescinde dall'idrogeno."))
+
+    if not beni:
+        return ""
+
+    out = ["", "<<<PAGINA>>>", "", "## Che cosa resta a questo Comune in ogni caso", "",
+           "Se al termine del percorso dovesse risultare che sul territorio l'idrogeno "
+           "non ha un impiego sensato — esito legittimo e in molti casi corretto — il "
+           "lavoro svolto non va perduto. Questi sono i risultati già acquisiti, "
+           "utilizzabili domani e indipendenti da qualunque decisione sull'idrogeno.", ""]
+    for titolo, uso in beni:
+        out.append(f"**{titolo}.** {uso}")
+        out.append("")
+    out.append("È il motivo per cui questo percorso conviene completarlo anche a chi "
+               "considera l'idrogeno una priorità lontana: il costo è la raccolta dei "
+               "dati, e quei dati servono comunque.")
+    out.append("")
+    return "\n".join(out)
+
+
+def _sezione_azienda(riga) -> str:
+    """Pagina staccabile per il colloquio con un'impresa del territorio.
+
+    Dove la domanda di idrogeno è industriale, il progetto non si decide in
+    Comune ma in azienda, e l'amministrazione deve saper condurre quella
+    conversazione senza essere esperta di idrogeno. Questa pagina le dà le
+    domande da fare e le cose che può mettere sul tavolo.
+    """
+    aziende = numero(riga.get("T21_N_AZIENDE_IDONEE"))
+    if not aziende:
+        return ""
+
+    out = ["", "<<<PAGINA>>>", "", "## Da portare all'incontro con l'azienda", "",
+           "Questa pagina è pensata per essere staccata e usata così com'è. "
+           "L'amministrazione non deve diventare esperta di idrogeno: deve saper "
+           "raccogliere cinque informazioni e sapere che cosa può offrire in cambio.", "",
+           "### Che cosa chiedere", "",
+           "| Domanda | Perché serve |", "| --- | --- |",
+           "| Quanta energia termica consuma il processo, in MWh all'anno, e con quale "
+           "combustibile oggi | È il numero da cui discende tutto: senza, qualunque "
+           "dimensionamento è un'ipotesi |",
+           "| A che temperatura lavora il processo | Sotto i 150 °C una pompa di calore "
+           "fa lo stesso lavoro a un terzo del costo: l'idrogeno non è in gara |",
+           "| Il processo è continuo o discontinuo, e su quante ore l'anno | Un "
+           "utilizzatore continuo rende sostenibile un impianto; uno stagionale no |",
+           "| L'idrogeno serve come combustibile o entra nella reazione | Se è materia "
+           "prima non esiste alternativa elettrica, ed è il caso in cui il progetto ha "
+           "le gambe più solide |",
+           "| Sareste disposti a firmare un contratto di acquisto pluriennale, e per "
+           "quale volume | È la domanda che distingue un interesse da un progetto, ed è "
+           "ciò che le banche e i bandi chiedono |", "",
+           "### Che cosa il Comune può mettere sul tavolo", "",
+           "- **Un'area**, individuata e verificata sotto il profilo urbanistico. È il "
+           "contributo che un operatore privato non può procurarsi da solo e quello che "
+           "fa la differenza sui tempi.",
+           "- **I tempi autorizzativi**, cioè l'impegno a istruire la pratica senza "
+           "code. Per un investitore vale quanto un contributo.",
+           "- **L'aggregazione della domanda**: mettere attorno allo stesso tavolo più "
+           "utilizzatori è ciò che porta un progetto sopra la soglia di sostenibilità.",
+           "- **La candidatura congiunta** a bandi regionali o europei, dove la presenza "
+           "dell'ente pubblico è spesso un requisito e quasi sempre un punteggio.", "",
+           "> Un avvertimento che conviene dire subito, in apertura di colloquio: se dal "
+           "confronto emerge che il processo è elettrificabile, questo è un buon esito e "
+           "non un fallimento. Costa a entrambi molto meno scoprirlo adesso che dopo uno "
+           "studio di fattibilità.", ""]
+    return "\n".join(out)
+
+
 def _passo3_con_allegato(riga, livello, profilo) -> str:
-    piano = testo_piano(riga, livello, profilo)
-    if not os.path.exists(FILE_ALLEGATO_QUADRO):
-        return piano
-    return piano + "\n\n<<<PAGINA>>>\n\n" + leggi_md(FILE_ALLEGATO_QUADRO)
+    """Il piano, poi le due pagine staccabili, poi il quadro normativo.
+
+    L'ordine non è casuale: la pagina per l'azienda e quella su ciò che resta
+    comunque sono le due che un amministratore porta fuori dalla stanza, quindi
+    stanno dopo il piano e prima dell'allegato, dove si trovano sfogliando
+    all'indietro dalla fine.
+    """
+    parti = [testo_piano(riga, livello, profilo),
+             _sezione_azienda(riga),
+             _sezione_eredita(riga)]
+    if os.path.exists(FILE_ALLEGATO_QUADRO):
+        parti.append("<<<PAGINA>>>\n\n" + leggi_md(FILE_ALLEGATO_QUADRO))
+    return "\n\n".join(p for p in parti if p and p.strip())
 
 
 def file_attesi(livello, profilo):
