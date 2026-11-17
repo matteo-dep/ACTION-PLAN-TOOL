@@ -2851,6 +2851,26 @@ def testo_percorso_a(riga) -> str:
     return commento_percorso(riga, "A")
 
 
+def flotta_da_contare(riga):
+    """Fabbisogno di idrogeno della flotta, al netto del verdetto del tool 2.2.
+
+    Il 2.2 scrive sempre T22_FABBISOGNO_H2_TON_ANNO, anche quando conclude che
+    la flotta va elettrificata: e' il fabbisogno che servirebbe SE si scegliesse
+    l'idrogeno, non una domanda da soddisfare. Sommarlo comunque faceva dire al
+    piano l'opposto di cio' che il tool aveva appena raccomandato, e gonfiava
+    tutto quello che ne discende: massa critica, saldo, dimensionamento.
+
+    Restituisce (contato, grezzo, elettrificabile):
+      contato        quanto entra nella domanda complessiva (None se escluso)
+      grezzo         il valore comunque scritto dal 2.2, per poterlo citare
+      elettrificabile vero se il 2.2 ha dichiarato praticabile la batteria
+    """
+    grezzo = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
+    bev = riga.get("T22_BEV_FATTIBILE")
+    elettrificabile = (not is_vuoto(bev)) and vero(bev)
+    return (None if elettrificabile else grezzo), grezzo, elettrificabile
+
+
 def saldo_domanda_offerta(riga, dom) -> str:
     """Confronto fra la domanda rilevata e la produzione simulata nel percorso B.
 
@@ -2897,15 +2917,41 @@ def saldo_domanda_offerta(riga, dom) -> str:
     return "\n".join(out)
 
 
+def _nota_flotta_elettrificabile(riga) -> str:
+    """Spiega perché il fabbisogno della flotta non entra nella somma."""
+    _, grezzo, elettrificabile = flotta_da_contare(riga)
+    if not (elettrificabile and grezzo):
+        return ""
+    return ("> **La flotta non è conteggiata, ed è una scelta, non una dimenticanza.** Il "
+            f"tool 2.2 ha calcolato {formatta_numero(grezzo)} t/anno di idrogeno per i "
+            "mezzi analizzati, ma ha anche concluso che per quei mezzi **la batteria è "
+            "praticabile**. Quel numero dice quanto idrogeno servirebbe se si scegliesse "
+            "l'idrogeno, non quanto ne serve: sommarlo qui significherebbe dimensionare un "
+            "impianto su una domanda che il piano stesso raccomanda di non creare. La "
+            "flotta resta nel piano come **intervento di elettrificazione**, che il Comune "
+            "deve realizzare comunque e prima.")
+
+
 def bilancio_domanda(riga, ind, flotta, dom) -> str:
     """Sintesi finale del percorso A: quanto pesa la domanda e cosa comporta."""
+    nota_flotta = _nota_flotta_elettrificabile(riga)
+
     if not dom:
-        return ("### Bilancio della domanda\n\n"
+        testo = ["### Bilancio della domanda", ""]
+        if nota_flotta:
+            testo += ["Per questo Comune non risulta una domanda di idrogeno da "
+                      "soddisfare.", "", nota_flotta, "",
+                      "Resta da verificare la domanda industriale, che è l'unica componente "
+                      "continua su tutto l'anno e quindi quella che determina la "
+                      "sostenibilità di qualunque impianto."]
+        else:
+            testo.append(
                 "Per questo Comune non è stato quantificato alcun fabbisogno di idrogeno. "
                 "L'analisi dei percorsi resta parziale finché i questionari sulla domanda "
                 "industriale e sulle flotte non vengono completati: senza un volume, "
                 "nessuna delle valutazioni successive su produzione e logistica può essere "
                 "dimensionata.")
+        return "\n".join(testo)
 
     kg_giorno = dom * 1000 / GIORNI_OPERATIVI
     bus_eq = kg_giorno / CONSUMO_BUS_KG_GIORNO
@@ -2920,6 +2966,8 @@ def bilancio_domanda(riga, ind, flotta, dom) -> str:
                f"a circa {formatta_numero(kg_giorno)} kg al giorno su {GIORNI_OPERATIVI} "
                "giorni operativi.")
     out.append("")
+    if nota_flotta:
+        out += [nota_flotta, ""]
 
     if ind and flotta:
         quota_ind = ind / (ind + flotta) * 100
@@ -3103,9 +3151,9 @@ def parti_percorso(riga, codice: str):
         sezioni = [sezione_hta(riga), sezione_flotte(riga),
                    sezione_nicchie(riga), sezione_termico(riga)]
         ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
-        flotta = numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO"))
-        dom = totale(riga, ["T21_FABBISOGNO_H2_TON_ANNO",
-                            "T22_FABBISOGNO_H2_TON_ANNO"])
+        flotta, _, _ = flotta_da_contare(riga)
+        valori = [v for v in (ind, flotta) if v is not None]
+        dom = sum(valori) if valori else None
         sezioni.append(bilancio_domanda(riga, ind, flotta, dom))
         return premessa, [s for s in sezioni if sostanziale(s)]
 
@@ -3573,30 +3621,352 @@ def _sezione_attivita(riga, profilo) -> str:
 
 
 
-# --- Strumenti di finanziamento noti al momento della stesura -----------------
-# Non sostituiscono la verifica dei bandi aperti: servono a indicare dove
-# cercare, con quale ordine di priorità e per quale componente.
-STRUMENTI_FINANZIAMENTO = [
-    ("Produzione",
-     "PNRR Hydrogen Valleys e successivi bandi nazionali sulla produzione di idrogeno "
-     "rinnovabile; FER X per la componente rinnovabile dell'impianto; Innovation Fund "
-     "europeo per le configurazioni di taglia industriale."),
-    ("Rifornimento",
-     "CEF Transport e AFIF (Alternative Fuels Infrastructure Facility) per le stazioni "
-     "sulla rete TEN-T; bandi PNRR dedicati alle stazioni di rifornimento a idrogeno."),
-    ("Flotte",
-     "Bandi regionali e nazionali per il rinnovo del trasporto pubblico locale, che "
-     "coprono in genere il differenziale rispetto al mezzo convenzionale; Conto Termico "
-     "e fondi per la mobilità sostenibile per i mezzi di servizio."),
-    ("Edifici ed efficienza",
-     "Conto Termico 3.0 per gli interventi sull'involucro e sui generatori del patrimonio "
-     "pubblico; PREPAC per gli immobili della pubblica amministrazione centrale e i "
-     "programmi regionali collegati."),
-    ("Studi e progettazione",
-     "Fondi di assistenza tecnica regionali ed europei, spesso trascurati e invece "
-     "decisivi: coprono studi di fattibilità e progettazione, che sono la spesa che un "
-     "Comune fatica di più a mettere a bilancio."),
+# --- Misure di piano e strumenti di finanziamento ---------------------------
+# Due cose diverse, che il piano teneva insieme in una tabella sola:
+#   - le MISURE DI PIANO (PNIEC, PER FVG, FVGreen, Strategia Regionale Idrogeno)
+#     sono il quadro a cui agganciare una delibera o una candidatura: non danno
+#     soldi, danno la motivazione;
+#   - gli STRUMENTI danno i soldi, e cambiano a ogni edizione.
+# Il secondo elenco invecchia in fretta: la data di verifica e' esposta nel
+# documento, cosi' chi lo legge sa quanto fidarsi e chi lo aggiorna sa da dove
+# ripartire. Aggiornare questa data ogni volta che si rivede l'elenco.
+DATA_VERIFICA_STRUMENTI = "5 ottobre 2026"
+
+MISURE_PIANO = [
+    ("PNIEC",
+     "Idrogeno rinnovabile circoscritto ai settori in cui l'elettrificazione "
+     "diretta non è praticabile; circa 5 GW di elettrolisi al 2030 per coprire "
+     "il 2% della domanda finale di energia.",
+     "L'intervento va motivato come **settore senza alternative**, non come "
+     "quota di idrogeno da raggiungere. È il criterio con cui viene letto in "
+     "istruttoria."),
+    ("Piano Energetico Regionale FVG",
+     "Cinque azioni dedicate all'idrogeno. Obiettivo al 2030: 79% di energia "
+     "elettrica da fonti rinnovabili, con circa 3,3 GW di nuova potenza "
+     "rispetto al 2020, indirizzata soprattutto al fotovoltaico.",
+     "Le superfici censite nel percorso B sono il contributo del Comune a quei "
+     "3,3 GW: è così che vanno presentate in una candidatura, non come progetto "
+     "isolato."),
+    ("Legge regionale 4/2023 (FVGreen)",
+     "Neutralità climatica del Friuli Venezia Giulia al 2045. Promuove "
+     "l'adesione al Patto dei Sindaci e l'adozione dei PAESC.",
+     "Il PAESC è il documento in cui questo piano si innesta. Se il Comune non "
+     "ce l'ha, farlo è il primo atto: senza, diversi canali di finanziamento "
+     "non sono nemmeno attivabili."),
+    ("Strategia Regionale per l'Idrogeno (dicembre 2025)",
+     "Neutralità tecnologica, North Adriatic Hydrogen Valley, South H2 Corridor "
+     "e decarbonizzazione delle filiere Hard-to-Abate regionali.",
+     "È il quadro da citare per candidarsi come area di produzione o come nodo "
+     "logistico, e per chiedere di essere inseriti nella programmazione "
+     "regionale."),
 ]
+
+# Strumenti di finanziamento.
+#   ambito    decide se la voce e' pertinente per questo Comune
+#   stato     "aperto" | "atteso" | "chiuso" | "non_comuni"
+# Gli stati "chiuso" e "non_comuni" NON vanno cancellati: sono le tre o quattro
+# voci che circolano nella documentazione divulgativa e che fanno perdere tempo
+# a chi le insegue. Dirlo esplicitamente vale piu' che ometterle.
+STRUMENTI = [
+    # ---------------------------------------------------------------- edifici
+    {"nome": "Conto Termico 3.0", "ambito": "edifici", "stato": "aperto",
+     "chi": "Comuni, anche tramite ESCO come soggetto responsabile",
+     "cosa": "Involucro 40%, involucro e impianti insieme 55%, trasformazione in "
+             "nZEB 65%, impianti a fonti rinnovabili termiche 65%. **Fino al 100% "
+             "per gli edifici dei Comuni sotto i 15.000 abitanti** destinati ad "
+             "attività pubbliche o sociali, per le scuole e per le strutture "
+             "sanitarie pubbliche.",
+     "nota": "Domande al GSE dal 2 febbraio 2026. È l'unico canale nazionale a "
+             "sportello realmente aperto a un Comune, e la prenotazione è "
+             "riservata proprio alla pubblica amministrazione. Il fotovoltaico "
+             "entra solo se abbinato alla sostituzione del generatore con una "
+             "pompa di calore."},
+    {"nome": "Diagnosi energetiche nel Conto Termico 3.0", "ambito": "studi",
+     "stato": "aperto",
+     "chi": "Pubbliche amministrazioni",
+     "cosa": "**Fino al 100% del costo della diagnosi energetica**, con acconto "
+             "del 50%, su un plafond dedicato.",
+     "nota": "È il modo più rapido per finanziare proprio i dati che alimentano "
+             "questo piano. Se una sola voce di questo elenco va usata subito, è "
+             "questa: produce i numeri che tutte le altre candidature chiedono."},
+    # ----------------------------------------------------------- rinnovabili
+    {"nome": "FER X - accesso diretto", "ambito": "rinnovabili", "stato": "aperto",
+     "chi": "Impianti fino a 1 MW; nessuna esclusione soggettiva per gli enti "
+            "pubblici",
+     "cosa": "Incentivo in accesso diretto per fotovoltaico, eolico, "
+             "idroelettrico e gas di depurazione, senza qualifica preliminare né "
+             "asta. Contingente 10 GW, validità fino al 31 dicembre 2030.",
+     "nota": "In vigore dal 7 agosto 2026: i lavori non possono essere iniziati "
+             "prima di quella data, e l'incentivo si chiede dopo l'entrata in "
+             "esercizio. I prezzi di riferimento sono di competenza ARERA: "
+             "verificarli prima di costruire un piano economico."},
+    {"nome": "FER X - procedure competitive", "ambito": "rinnovabili",
+     "stato": "atteso",
+     "chi": "Impianti sopra 1 MW, previa qualifica preliminare",
+     "cosa": "Aste bandite dal GSE, con calendario pluriennale.",
+     "nota": "La qualifica per la prima procedura è già scaduta. Per un impianto "
+             "sopra 1 MW il percorso è la tornata successiva, e va messa in conto "
+             "nel cronoprogramma."},
+    {"nome": "Comunità energetiche rinnovabili (CACER)", "ambito": "rinnovabili",
+     "stato": "aperto",
+     "chi": "Comuni, come membri o come clienti finali",
+     "cosa": "**Tariffa incentivante** sull'energia condivisa, ancora "
+             "richiedibile. Il contributo in conto capitale del PNRR, fino al "
+             "40%, è invece chiuso alle domande.",
+     "nota": "La Regione ha aperto un proprio bando CER nel 2026 (40% sugli "
+             "impianti, 30% sugli accumuli, fino a 1 milione per richiedente): "
+             "l'edizione è chiusa, ma è il canale regionale da monitorare per la "
+             "riapertura. In FVG esiste anche una CER di area vasta a cui diverse "
+             "amministrazioni hanno già aderito."},
+    # ---------------------------------------------------------------- flotte
+    {"nome": "Rinnovo del trasporto pubblico locale", "ambito": "flotte",
+     "stato": "chiuso",
+     "chi": "Regioni e Comuni sopra i 100.000 abitanti",
+     "cosa": "Fondi PNRR per il parco autobus e Piano Strategico Nazionale "
+             "Mobilità Sostenibile.",
+     "nota": "Nessuno dei due è uno sportello aperto a un Comune di medie "
+             "dimensioni: si passa dalla Regione o dall'azienda di trasporto. La "
+             "strada praticabile è entrare nella programmazione regionale, non "
+             "candidarsi direttamente."},
+    # ------------------------------------------------------------ produzione
+    {"nome": "PNRR - Hydrogen Valleys e misure sull'idrogeno", "ambito": "produzione",
+     "stato": "chiuso",
+     "chi": "Progetti già selezionati; nessuna finestra aperta",
+     "cosa": "Produzione in aree industriali dismesse, stazioni di rifornimento, "
+             "usi hard-to-abate.",
+     "nota": "La misura è in attuazione e in ritardo, con le scadenze di fine "
+             "lavori già maturate. Citarla come fonte di copertura in una "
+             "delibera oggi è un errore: serve semmai come precedente, per "
+             "dimostrare che il modello è già stato finanziato in regione."},
+    {"nome": "Bandi regionali FVG sull'idrogeno", "ambito": "produzione",
+     "stato": "chiuso",
+     "chi": "Prevalentemente imprese; una linea ammetteva anche le pubbliche "
+            "amministrazioni",
+     "cosa": "Produzione di idrogeno rinnovabile in aree dismesse, con intensità "
+             "molto elevate sulla spesa ammissibile.",
+     "nota": "Le edizioni finora aperte si sono chiuse e sono state assegnate a "
+             "imprese. È però il canale con la probabilità più alta di "
+             "riaprire: vale la pena farsi trovare con l'area individuata e "
+             "l'istruttoria urbanistica già avviata."},
+    # ----------------------------------------------------------- rifornimento
+    {"nome": "CEF Transport e AFIF", "ambito": "rifornimento", "stato": "chiuso",
+     "chi": "Enti pubblici ammessi, con cofinanziamento di un istituto "
+            "finanziario",
+     "cosa": "Infrastrutture per i combustibili alternativi sulla rete TEN-T.",
+     "nota": "**Attenzione a un equivoco diffuso:** l'edizione 2026 è limitata "
+             "alla ricarica elettrica dei veicoli pesanti e non copre le stazioni "
+             "a idrogeno. Prima di impostare una candidatura va verificato il "
+             "perimetro tecnologico della call aperta in quel momento."},
+    {"nome": "Innovation Fund e Banca europea dell'idrogeno", "ambito": "produzione",
+     "stato": "non_comuni",
+     "chi": "Produttori di idrogeno, con almeno 5 MW di elettrolisi su un solo "
+            "sito",
+     "cosa": "Aste europee sul premio alla produzione di idrogeno rinnovabile.",
+     "nota": "Fuori scala per un Comune come beneficiario diretto. Rilevante solo "
+             "come canale del partner industriale: se un operatore vi propone un "
+             "impianto, è lì che andrà a cercare le risorse, ed è utile saperlo "
+             "prima di trattare."},
+    # ------------------------------------------------------------------ studi
+    {"nome": "ELENA (Banca europea per gli investimenti)", "ambito": "studi",
+     "stato": "aperto",
+     "chi": "Autorità locali, anche in forma aggregata",
+     "cosa": "Fino al 90% dei costi di sviluppo: studi tecnici, diagnosi, business "
+             "plan, consulenza legale e finanziaria, gare, project management.",
+     "nota": "Sportello continuo, senza scadenze, ma la soglia di investimento "
+             "richiesta è alta: per un Comune di medie dimensioni è praticabile "
+             "solo aggregandosi con i vicini o passando dalla Regione. È un buon "
+             "motivo in più per costruire il progetto a scala sovracomunale."},
+    {"nome": "European City Facility e fondi di assistenza tecnica",
+     "ambito": "studi", "stato": "atteso",
+     "chi": "Comuni ed enti locali dotati di un piano clima, tipicamente il PAESC",
+     "cosa": "Contributo forfettario per sviluppare un investment concept, cioè "
+             "il documento che trasforma un'idea in un progetto finanziabile.",
+     "nota": "Nuove call annunciate: importi e scadenze vanno verificati al "
+             "momento. Il requisito del PAESC è un'altra ragione per averlo."},
+    {"nome": "Supporto tecnico di FVG Energia e di APE FVG", "ambito": "studi",
+     "stato": "aperto",
+     "chi": "Comuni del Friuli Venezia Giulia",
+     "cosa": "Consulenza e assistenza tecnica sulla normativa energetica, sulle "
+             "diagnosi, sulle analisi di fattibilità e sulle comunità energetiche.",
+     "nota": "È gratuito, è già attivo ed è coperto da un accordo con ANCI FVG "
+             "fino al 2030. È il primo numero da chiamare, e costa solo una mail."},
+]
+
+ETICHETTE_STATO = {
+    "aperto": "Aperto",
+    "atteso": "Atteso",
+    "chiuso": "Chiuso",
+    "non_comuni": "Non per i Comuni",
+}
+
+ORDINE_AMBITI = ["studi", "edifici", "rinnovabili", "flotte", "produzione",
+                 "rifornimento"]
+
+NOMI_AMBITO = {
+    "studi": "Studi, diagnosi e progettazione",
+    "edifici": "Edifici pubblici ed efficienza",
+    "rinnovabili": "Rinnovabili e comunità energetiche",
+    "flotte": "Flotte e mobilità",
+    "produzione": "Produzione di idrogeno",
+    "rifornimento": "Stazione di rifornimento",
+}
+
+
+def ambiti_pertinenti(riga) -> list:
+    """Quali famiglie di strumenti hanno senso per questo Comune.
+
+    Prima la tabella elencava sempre tutte le voci: un Comune senza flotta
+    leggeva comunque la riga sui bandi per il trasporto pubblico, e un Comune
+    senza stazione quella sulle infrastrutture di rifornimento. Qui si parte
+    dai dati raccolti.
+    """
+    ambiti = ["studi", "edifici"]        # valgono per qualunque Comune
+
+    if any(numero(riga.get(c)) for c in
+           ("T25_AREE_IDONEE_MQ", "T25_SUP_BROWNFIELD_MQ", "T25_SUP_TETTI_CIV_MQ",
+            "T25_SUP_TETTI_IND_MQ", "T26_TAGLIA_FER_INSTALLATA_MW",
+            "T25_FER_INSTALLATA_MW")):
+        ambiti.append("rinnovabili")
+
+    if numero(riga.get("T22_N_VEICOLI_ANALIZZATI")) or \
+            numero(riga.get("T22_FABBISOGNO_H2_TON_ANNO")):
+        ambiti.append("flotte")
+
+    if numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO")) or \
+            numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO")):
+        ambiti.append("produzione")
+
+    if numero(riga.get("T28_CAPACITA_KG_GIORNO")) or \
+            numero(riga.get("T27_TGM_CAMION")):
+        ambiti.append("rifornimento")
+
+    return [a for a in ORDINE_AMBITI if a in ambiti]
+
+
+def _sezione_misure_piano() -> str:
+    """Le misure di piano a cui agganciare la delibera o la candidatura."""
+    out = ["#### A quali misure di piano si aggancia", "",
+           "Un intervento si finanzia se è riconoscibile dentro una "
+           "programmazione già approvata. Questa tabella serve a scriverlo nella "
+           "delibera e nella domanda: non sono fonti di risorse, sono le "
+           "motivazioni che le rendono ammissibili.", "",
+           "| Strumento di programmazione | Che cosa prevede | Come usarlo |",
+           "| --- | --- | --- |"]
+    for nome, prevede, uso in MISURE_PIANO:
+        out.append(f"| **{nome}** | {prevede} | {uso} |")
+    out.append("")
+    return "\n".join(out)
+
+
+def _sezione_strumenti(riga, livello) -> str:
+    """Strumenti di finanziamento, filtrati sulla situazione del Comune."""
+    pertinenti = ambiti_pertinenti(riga)
+    out = ["#### Strumenti di finanziamento", "",
+           "L'elenco indica dove cercare, non quanto si otterrà: dotazioni e "
+           "aliquote cambiano a ogni edizione. Sono riportate anche le voci "
+           "**chiuse o non accessibili a un Comune**, perché sono quelle che "
+           "circolano di più nella documentazione divulgativa e che fanno "
+           "perdere più tempo.", ""]
+
+    aperti = []
+    for ambito in pertinenti:
+        voci = [s for s in STRUMENTI if s["ambito"] == ambito]
+        if not voci:
+            continue
+        out.append(f"**{NOMI_AMBITO[ambito]}**")
+        out.append("")
+        out += ["| Strumento | Stato | A chi si rivolge | Che cosa copre |",
+                "| --- | --- | --- | --- |"]
+        for s in voci:
+            out.append(f"| {s['nome']} | {ETICHETTE_STATO[s['stato']]} | "
+                       f"{s['chi']} | {s['cosa']} |")
+            if s["stato"] == "aperto":
+                aperti.append(s["nome"])
+        out.append("")
+        for s in voci:
+            out.append(f"**{s['nome']}.** {s['nota']}")
+            out.append("")
+
+    esclusi = [NOMI_AMBITO[a] for a in ORDINE_AMBITI if a not in pertinenti]
+    if esclusi:
+        out.append("Non sono riportati gli strumenti relativi a "
+                   + ", ".join(e.lower() for e in esclusi) +
+                   ": i dati raccolti non mostrano interventi di quel tipo sul "
+                   "territorio. Se la situazione cambia, l'elenco si aggiorna da "
+                   "sé alla rigenerazione del piano.")
+        out.append("")
+
+    if aperti:
+        out.append("**Che cosa è davvero attivabile adesso:** "
+                   + ", ".join(aperti) + ". Tutto il resto richiede di attendere "
+                   "una riapertura, o passa da un altro soggetto.")
+        out.append("")
+
+    if livello == "L1":
+        out.append("Al livello di maturità rilevato, la voce da usare per prima è "
+                   "la diagnosi energetica nel Conto Termico 3.0: è coperta fino "
+                   "all'intero costo, produce i dati che tutte le altre "
+                   "candidature richiedono, e non impegna il Comune in nulla "
+                   "d'altro.")
+    else:
+        out.append("La sequenza consigliata è: prima i fondi per diagnosi, studi "
+                   "e progettazione, che producono i documenti richiesti dagli "
+                   "altri bandi; poi la candidatura sulle infrastrutture, "
+                   "allegando i contratti di acquisto come prova della domanda; "
+                   "infine i contributi sulle flotte, che vanno richiesti quando "
+                   "il rifornimento è certo e non prima.")
+    out.append("")
+    out.append(f"> Ricognizione aggiornata al {DATA_VERIFICA_STRUMENTI}. Gli "
+               "strumenti di finanziamento cambiano più in fretta di questo "
+               "documento: prima di impostare una candidatura va verificato lo "
+               "stato della misura, e il supporto tecnico regionale è il modo "
+               "più rapido per farlo.")
+    out.append("")
+    return "\n".join(out)
+
+
+def componenti_investimento(riga):
+    """Ripartizione dell'investimento per soggetto.
+
+    Sta in una funzione sola perché la usano sia la sintesi esecutiva sia il
+    piano di investimento: due calcoli paralleli dello stesso importo sono il
+    modo in cui il documento era già arrivato a dichiarare due totali diversi.
+
+    Restituisce (componenti, connessioni), dove componenti è una lista di
+    (nome, importo, soggetto, nota) e connessioni è la quota di allacciamento
+    già compresa nel CAPEX dell'impianto.
+    """
+    capex_prod = numero(riga.get("T26_CAPEX_TOTALE_MLN"))
+    capex_hrs = numero(riga.get("T28_CAPEX_COMPLESSIVO_EURO"))
+    delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
+    connessioni = numero(riga.get("T26_CAPEX_CONNESSIONI_EURO"))
+
+    componenti = []
+    if capex_prod:
+        componenti.append(("Impianto di produzione", capex_prod * 1e6,
+                           "Operatore privato o società mista",
+                           "Il Comune conferisce aree, autorizzazioni e domanda; "
+                           "l'investimento è di norma a carico di un partner industriale."))
+    # Le connessioni elettriche sono già dentro il CAPEX dell'impianto: il tool 2.6
+    # le restituisce come "di cui". Elencarle come voce autonoma le sommava una
+    # seconda volta e il totale usciva gonfiato.
+    if connessioni and not capex_prod:
+        componenti.append(("Connessioni elettriche", connessioni,
+                           "Titolare dell'impianto",
+                           "Costo a carico di chi realizza l'impianto, ma soggetto ai "
+                           "tempi del distributore: va verificato prima di ogni impegno."))
+    if capex_hrs:
+        componenti.append(("Stazione di rifornimento", capex_hrs,
+                           "Operatore del settore carburanti",
+                           "Raramente realizzata direttamente da un Comune. Il ruolo "
+                           "dell'ente è mettere a disposizione l'area e garantire i tempi "
+                           "autorizzativi."))
+    if delta_tco and delta_tco > 0:
+        componenti.append(("Differenziale sulla flotta", delta_tco,
+                           "Comune",
+                           "È l'unica voce interamente pubblica, e quella su cui si "
+                           "concentrano i contributi in conto capitale."))
+    return componenti, connessioni
 
 
 def _sezione_investimento(riga, livello) -> str:
@@ -3604,7 +3974,6 @@ def _sezione_investimento(riga, livello) -> str:
     capex_prod = numero(riga.get("T26_CAPEX_TOTALE_MLN"))
     capex_hrs = numero(riga.get("T28_CAPEX_COMPLESSIVO_EURO"))
     delta_tco = numero(riga.get("T22_DELTA_TCO_EURO"))
-    connessioni = numero(riga.get("T26_CAPEX_CONNESSIONI_EURO"))
 
     ha_importi = bool(capex_prod or capex_hrs or (delta_tco and delta_tco > 0))
 
@@ -3627,32 +3996,7 @@ def _sezione_investimento(riga, livello) -> str:
                 "che è anche la sola spesa certa di questo piano nel primo biennio.", ""]
 
     # --- ripartizione per soggetto
-    componenti = []
-    if capex_prod:
-        componenti.append(("Impianto di produzione", capex_prod * 1e6,
-                           "Operatore privato o società mista",
-                           "Il Comune conferisce aree, autorizzazioni e domanda; "
-                           "l'investimento è di norma a carico di un partner industriale."))
-    # Le connessioni elettriche sono già dentro il CAPEX dell'impianto: il tool 2.6
-    # le restituisce come "di cui". Elencarle come voce autonoma le sommava una
-    # seconda volta e il totale usciva gonfiato (12,14 mln -> 16,16 mln), con il
-    # numero sbagliato proprio nella frase "da portare in Consiglio".
-    if connessioni and not capex_prod:
-        componenti.append(("Connessioni elettriche", connessioni,
-                           "Titolare dell'impianto",
-                           "Costo a carico di chi realizza l'impianto, ma soggetto ai "
-                           "tempi del distributore: va verificato prima di ogni impegno."))
-    if capex_hrs:
-        componenti.append(("Stazione di rifornimento", capex_hrs,
-                           "Operatore del settore carburanti",
-                           "Raramente realizzata direttamente da un Comune. Il ruolo "
-                           "dell'ente è mettere a disposizione l'area e garantire i tempi "
-                           "autorizzativi."))
-    if delta_tco and delta_tco > 0:
-        componenti.append(("Differenziale sulla flotta", delta_tco,
-                           "Comune",
-                           "È l'unica voce interamente pubblica, e quella su cui si "
-                           "concentrano i contributi in conto capitale."))
+    componenti, connessioni = componenti_investimento(riga)
 
     if componenti:
         out.append("#### Ripartizione per soggetto")
@@ -3685,28 +4029,9 @@ def _sezione_investimento(riga, livello) -> str:
                        "prima di ogni impegno.")
             out.append("")
 
-    # --- strumenti di finanziamento
-    out.append("#### Strumenti di finanziamento")
-    out.append("L'elenco indica dove cercare, non quanto si otterrà: le dotazioni e le "
-               "aliquote cambiano a ogni edizione, e vanno verificate al momento della "
-               "candidatura.")
-    out.append("")
-    out += ["| Componente | Strumenti |", "| --- | --- |"]
-    out += [f"| {n} | {s} |" for n, s in STRUMENTI_FINANZIAMENTO]
-    out.append("")
-
-    if livello == "L1":
-        out.append("Al livello di maturità rilevato, la voce più utile della tabella è "
-                   "l'ultima. I fondi di assistenza tecnica coprono studi e progettazione, "
-                   "che sono la spesa che precede tutte le altre e quella che più spesso "
-                   "blocca i progetti prima ancora che comincino.")
-    else:
-        out.append("La sequenza consigliata è: prima i fondi per studi e progettazione, che "
-                   "producono i documenti richiesti dagli altri bandi; poi la candidatura "
-                   "sulle infrastrutture, allegando i contratti di acquisto come prova "
-                   "della domanda; infine i contributi sulle flotte, che vanno richiesti "
-                   "quando il rifornimento è certo e non prima.")
-    out.append("")
+    # --- misure di piano e strumenti di finanziamento
+    out.append(_sezione_misure_piano())
+    out.append(_sezione_strumenti(riga, livello))
 
     # --- scaglionamento
     out.append("#### Scaglionamento della spesa")
@@ -3927,6 +4252,246 @@ def normalizza_uscita(testo: str) -> str:
     return testo
 
 
+# =============================================================================
+# SINTESI ESECUTIVA
+# =============================================================================
+# I Comuni pilota hanno chiesto due cose incompatibili sulla lunghezza: chi
+# amministra vuole poche pagine e ordini di grandezza, chi sta all'ufficio
+# tecnico vuole il dettaglio e gli indicatori. Non sono due documenti: e' un
+# documento a due livelli, con davanti la pagina che basta a decidere.
+
+# Colonna che testimonia la compilazione di ciascun questionario, per poter
+# dire quali mancano invece di tacere sui buchi.
+TESTIMONE_QUESTIONARIO = [
+    ("2.1", "censimento delle utenze industriali", "T21_N_AZIENDE_IDONEE"),
+    ("2.2", "flotte e costo totale di possesso", "T22_N_VEICOLI_ANALIZZATI"),
+    ("2.3", "usi di nicchia", "T23_FLAG_DEPURATORI"),
+    ("2.4", "fabbisogno termico degli edifici", "T24_FABBISOGNO_TERMICO_KWH_ANNO"),
+    ("2.5", "superfici e potenziale rinnovabile", "T25_AREE_IDONEE_MQ"),
+    ("2.6", "dimensionamento della produzione", "T26_PRODUZIONE_H2_TON_ANNO"),
+    ("2.7", "vocazione al transito", "T27_SCORE_C1"),
+    ("2.8", "progetto della stazione", "T28_CAPACITA_KG_GIORNO"),
+]
+
+
+def questionari_mancanti(riga) -> list:
+    """Questionari che non risultano compilati, come (codice, descrizione)."""
+    fuori = []
+    for codice, nome, colonna in TESTIMONE_QUESTIONARIO:
+        if is_vuoto(riga.get(colonna)):
+            fuori.append((codice, nome))
+    return fuori
+
+
+def _verdetto_sintesi(riga, livello, profilo, dom, prod) -> str:
+    """Le due o tre frasi che un amministratore legge al posto del documento."""
+    mancanti = questionari_mancanti(riga)
+    provvisoria = domanda_provvisoria(riga)
+    copertura = (prod / dom * 100) if (dom and prod) else None
+
+    if not dom and not prod:
+        return ("**Questo piano è, per ora, un inquadramento.** Dai dati raccolti non "
+                "risulta né una domanda di idrogeno quantificata né una capacità di "
+                "produzione dimensionata, quindi nessuna delle valutazioni economiche "
+                "può essere svolta. Non significa che l'idrogeno non serva: significa "
+                "che non lo sappiamo ancora, e le pagine che seguono dicono quali "
+                "verifiche lo stabilirebbero. È un risultato utile: evita di avviare "
+                "uno studio di fattibilità su un'ipotesi che potrebbe non reggere.")
+
+    if dom and not prod:
+        testo = (f"**Sul territorio esiste una domanda potenziale di "
+                 f"{formatta_numero(dom)} tonnellate di idrogeno all'anno**, ma non è "
+                 "ancora stato verificato dove e a che costo produrle. È la verifica "
+                 "che decide tutto il resto: senza, la domanda resta un numero che non "
+                 "si può né contrattualizzare né finanziare.")
+        if dom < SOGLIA_MASSA_CRITICA_TON:
+            testo += (f" Il volume è inoltre sotto le "
+                      f"{formatta_numero(SOGLIA_MASSA_CRITICA_TON)} t/anno assunte come "
+                      "soglia di sostenibilità per un progetto autonomo: da solo il "
+                      "Comune non fa massa critica, e la strada praticabile è "
+                      "l'aggregazione con i territori vicini.")
+        if provvisoria:
+            testo += (" **Il dato va però confermato**: le aziende da cui deriva non "
+                      "hanno un codice ATECO classificabile, quindi non è accertato che "
+                      "l'idrogeno sia per loro tecnicamente necessario.")
+        return testo
+
+    if prod and not dom:
+        return (f"**Il territorio potrebbe produrre circa {formatta_numero(prod)} "
+                "tonnellate di idrogeno all'anno, ma non risulta chi le comprerebbe.** "
+                "È la configurazione più rischiosa: un impianto senza acquirente "
+                "contrattualizzato lavora a carico parziale e il costo del chilogrammo "
+                "sale in proporzione. Prima di qualunque decisione sull'impianto va "
+                "completato il censimento della domanda.")
+
+    saldo = prod - dom
+    if saldo < 0:
+        testo = (f"**Domanda e produzione sono entrambe quantificate, e non si "
+                 f"coprono.** Il territorio consumerebbe {formatta_numero(dom)} "
+                 f"tonnellate all'anno e ne produrrebbe {formatta_numero(prod)}: "
+                 f"{percentuale(copertura)} del fabbisogno, con "
+                 f"**{formatta_numero(abs(saldo))} tonnellate da approvvigionare fuori "
+                 "dal territorio comunale**. È il numero che giustifica l'aggregazione "
+                 "sovracomunale: da soli, quella quota si compra sul mercato a prezzi "
+                 "su cui l'ente non ha alcuna leva.")
+    elif saldo > 0:
+        testo = (f"**La produzione ipotizzata eccede la domanda locale** di "
+                 f"{formatta_numero(saldo)} tonnellate all'anno. L'eccedenza non è un "
+                 "margine di sicurezza ma un rischio: serve un acquirente esterno "
+                 "contrattualizzato prima della costruzione, oppure l'impianto va "
+                 "ridimensionato.")
+    else:
+        testo = ("**Domanda e produzione si equivalgono.** È la configurazione più "
+                 "efficiente sulla carta e la più fragile nei fatti: basta che un "
+                 "utilizzatore si sfili perché l'impianto resti scoperto.")
+    if mancanti:
+        testo += (f" L'analisi resta parziale: {len(mancanti)} questionari su "
+                  f"{len(TESTIMONE_QUESTIONARIO)} non risultano compilati.")
+    return testo
+
+
+def _mosse_sintesi(riga, livello, profilo, dom, prod) -> list:
+    """Le prime tre cose da fare, dedotte dallo stato effettivo dei dati."""
+    mosse = []
+    mancanti = questionari_mancanti(riga)
+
+    if domanda_provvisoria(riga):
+        mosse.append("**Verificare i codici ATECO** delle aziende censite: tutta la "
+                     "catena di calcolo che segue vi si appoggia, e oggi non è "
+                     "accertata. Si risolve con una telefonata per azienda.")
+
+    if mancanti:
+        quali = ", ".join(f"il {c} ({n})" for c, n in mancanti[:3])
+        mosse.append(f"**Completare i questionari mancanti**: {quali}"
+                     + (" e gli altri" if len(mancanti) > 3 else "") +
+                     ". Finché restano vuoti, le sezioni corrispondenti del piano non "
+                     "possono essere generate.")
+
+    if dom and prod and prod < dom:
+        mosse.append("**Aprire il confronto con i Comuni limitrofi**: il fabbisogno "
+                     "che il territorio non copre da solo diventa finanziabile solo "
+                     "su scala sovracomunale.")
+    elif dom and not prod:
+        mosse.append("**Dimensionare la produzione con il tool 2.6**, per sapere se "
+                     "quella domanda può essere servita localmente o va importata.")
+
+    # Solo se non e' gia' nota: chiederla a chi l'ha gia' dichiarata fa sembrare
+    # che il piano non abbia letto i dati che gli sono stati dati.
+    if numero(riga.get("T25_CAPACITA_RESIDUA_MW")) is None:
+        mosse.append("**Richiedere al distributore la capacità residua** del nodo di "
+                     "connessione. È il vincolo che più spesso determina i tempi di un "
+                     "progetto, costa una lettera e va verificato prima di ogni impegno.")
+
+    mosse.append("**Finanziare la diagnosi energetica** con il Conto Termico: per i "
+                 "Comuni è coperta fino all'intero costo e produce proprio i dati che "
+                 "questo piano richiede e che oggi mancano.")
+    return mosse[:3]
+
+
+def sintesi_esecutiva(riga, livello, profilo, punteggi) -> str:
+    """Le due pagine che precedono tutto il resto."""
+    comune = str(riga.get(COL_NOME, "")).strip()
+    ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
+    flotta, _, _ = flotta_da_contare(riga)
+    valori = [v for v in (ind, flotta) if v is not None]
+    dom = sum(valori) if valori else None
+    prod = numero(riga.get("T26_PRODUZIONE_H2_TON_ANNO"))
+
+    out = ["# In sintesi", ""]
+    if comune:
+        out.append(f"**Comune di {comune}** · livello di maturità {livello}"
+                   + (f" · profilo strategico {profilo}" if profilo else ""))
+        out.append("")
+    out.append("> Questa sezione è scritta per chi deve decidere senza leggere il "
+               "resto. Tutto ciò che segue nel documento argomenta i punti qui sotto, "
+               "con i dati, i calcoli e i riferimenti normativi.")
+    out.append("")
+    out.append(_verdetto_sintesi(riga, livello, profilo, dom, prod))
+    out.append("")
+
+    # ------------------------------------------------------------ i numeri
+    righe = []
+    if dom:
+        righe.append(f"| Domanda potenziale di idrogeno | {formatta_numero(dom)} t/anno |")
+    if prod:
+        righe.append(f"| Produzione locale ipotizzata | {formatta_numero(prod)} t/anno |")
+    if dom and prod:
+        righe.append(f"| Copertura del fabbisogno | "
+                     f"{formatta_numero(prod / dom * 100)}% |")
+    sup = sum(numero(riga.get(c)) or 0 for c in
+              ("T25_SUP_BROWNFIELD_MQ", "T25_SUP_INCOLTE_MQ", "T25_SUP_SAU_MQ",
+               "T25_SUP_SERVITU_MQ"))
+    if sup:
+        righe.append(f"| Superfici a terra disponibili | "
+                     f"{formatta_numero(sup / 10000)} ha |")
+    cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
+    if cap_rete:
+        righe.append(f"| Capacità residua di rete | {formatta_numero(cap_rete)} MW |")
+
+    componenti, _ = componenti_investimento(riga)
+    if componenti:
+        totale = sum(i for _, i, _, _ in componenti)
+        quota = sum(i for _, i, s, _ in componenti if s == "Comune")
+        righe.append(f"| Investimento complessivo | Euro {formatta_numero(totale)} |")
+        righe.append(f"| **Di cui a carico del bilancio comunale** | "
+                     f"**Euro {formatta_numero(quota)}** |")
+
+    if righe:
+        out += ["## I numeri", "", "| | |", "| --- | --- |"] + righe + [""]
+
+    # --------------------------------------------- che cosa comporta per il Comune
+    out += ["## Che cosa comporta per il Comune", ""]
+    if componenti:
+        quota = sum(i for _, i, s, _ in componenti if s == "Comune")
+        totale = sum(i for _, i, _, _ in componenti)
+        if quota == 0:
+            out.append("Nessuna delle voci di investimento grava sul bilancio comunale. "
+                       "Il contributo dell'ente è in **aree, atti e tempi**: mettere a "
+                       "disposizione le superfici, garantire i tempi autorizzativi e "
+                       "aggregare la domanda. Sono le tre cose che un partner "
+                       "industriale non può procurarsi da solo, ed è per questo che il "
+                       "Comune è indispensabile anche senza mettere risorse.")
+        else:
+            out.append(f"Degli Euro {formatta_numero(totale)} complessivi, la quota "
+                       f"riconducibile al bilancio comunale è di **Euro "
+                       f"{formatta_numero(quota)}**, pari "
+                       f"{percentuale_a(quota / totale * 100)}. È il numero da portare "
+                       "in Consiglio: il resto misura la dimensione del progetto, non "
+                       "l'impegno dell'ente. Per il resto il contributo del Comune è in "
+                       "aree, atti e tempi.")
+    else:
+        out.append("A questo stadio non esiste alcun impegno di spesa per il Comune. "
+                   "Ciò che serve è tempo di personale per completare la raccolta dati, "
+                   "e la diagnosi energetica che la sostiene è finanziabile fino "
+                   "all'intero costo.")
+    out.append("")
+
+    # ---------------------------------------------------------- le prime mosse
+    mosse = _mosse_sintesi(riga, livello, profilo, dom, prod)
+    if mosse:
+        out += ["## Le prime tre mosse", ""]
+        out += [f"{i}. {m}" for i, m in enumerate(mosse, 1)]
+        out.append("")
+
+    # -------------------------------------------------------- che cosa non sappiamo
+    mancanti = questionari_mancanti(riga)
+    if mancanti:
+        out += ["## Che cosa questo piano non sa ancora", "",
+                "Le analisi che seguono si fermano dove si fermano i dati. Non risultano "
+                "compilati:", ""]
+        out += [f"- **Questionario {c}** — {n}" for c, n in mancanti]
+        out += ["", "Non è una lacuna del metodo: è l'elenco delle verifiche che "
+                    "trasformerebbero questo inquadramento in un documento su cui si "
+                    "può deliberare.", ""]
+
+    out.append("> Il resto del documento è organizzato in tre passi: il Passo 1 "
+               "inquadra la capacità amministrativa e il profilo del territorio, il "
+               "Passo 2 riporta i risultati tecnici percorso per percorso, il Passo 3 "
+               "contiene il piano d'azione, il cronoprogramma e il quadro finanziario. "
+               "Il quadro normativo di riferimento è in allegato, in chiusura.")
+    return "\n".join(out)
+
+
 def costruisci_contenuti(riga, livello, profilo, punteggi) -> dict:
     profilo_file = f"4-profilo_{profilo}_it.md" if profilo else ""
     return {k: (normalizza_uscita(v) if isinstance(v, str) else v)
@@ -3939,7 +4504,12 @@ def _contenuti_grezzi(riga, livello, profilo, punteggi, profilo_file) -> dict:
         "livello": livello,
         "profilo": profilo,
         "comune": str(riga[COL_NOME]),
-        "intro": leggi_md("1-intro_it.md"),
+        # La sintesi apre il documento, subito dopo copertina e indice: e' la
+        # pagina che i Comuni hanno chiesto esplicitamente, perche' chi decide
+        # non legge trenta pagine e chi le legge vuole comunque il riassunto
+        # davanti. Sta dentro "intro" per non toccare il renderer.
+        "intro": (sintesi_esecutiva(riga, livello, profilo, punteggi)
+                  + "\n\n<<<PAGINA>>>\n\n" + leggi_md("1-intro_it.md")),
         "struttura": leggi_md("2-struttura_plan_it.md"),
         "mat_intro": leggi_md("3-maturita_intro_it.md"),
         "mat_dettaglio": leggi_md(f"3-maturita_{livello}_it.md"),
