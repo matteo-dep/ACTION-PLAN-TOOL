@@ -9,9 +9,10 @@ percorsa da mezzi pesanti che, per obbligo normativo, dovranno rifornirsi da
 qualche parte. È una domanda che non appartiene al territorio ma lo attraversa, e
 che si cattura soltanto se c'è una stazione dove fermarsi.
 
-La differenza rispetto ai percorsi precedenti è sostanziale. La domanda locale si
-conosce, si contratta e si pianifica; quella di transito si stima, dipende da come
-altri costruiscono la propria rete e va contesa. Il regolamento europeo **AFIR**
+Questa domanda si comporta diversamente da quella locale. La domanda locale si
+rileva presso utenti identificabili e si acquisisce con un contratto di fornitura;
+quella di transito si stima a partire dai dati di traffico e dipende dalle stazioni
+che altri operatori apriranno lungo la stessa direttrice. Il regolamento europeo **AFIR**
 impone una stazione di rifornimento a idrogeno ogni duecento chilometri lungo la
 rete centrale TEN-T entro il 2030: chi si colloca in un vuoto di quella maglia ha
 un vantaggio che nessun altro fattore locale può replicare, ma è un vantaggio che

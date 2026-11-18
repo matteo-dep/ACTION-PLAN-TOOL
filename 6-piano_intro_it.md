@@ -10,5 +10,5 @@ esistenti e delle lacune da colmare, il cronoprogramma con i traguardi intermedi
 le attività specifiche di competenza comunale e la valutazione di sostenibilità
 economica e climatica.
 
-Non è un elenco di intenti. Ogni azione discende da un dato rilevato nelle sezioni
-precedenti, e dove il dato manca l'azione è la sua raccolta.
+Ogni azione elencata discende da un dato rilevato nelle sezioni precedenti. Dove il
+dato manca, l'azione consiste nel raccoglierlo.

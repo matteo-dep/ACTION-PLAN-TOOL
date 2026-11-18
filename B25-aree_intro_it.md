@@ -1,6 +1,6 @@
 ### Aree e potenziale rinnovabile (Tool 2.5)
 
-Produrre idrogeno significa prima di tutto produrre elettricità rinnovabile, e questo richiede superficie. È il vincolo che decide la scala di qualunque progetto, prima ancora del capitale disponibile: un elettrolizzatore si acquista, un ettaro di terreno idoneo no.
+Produrre idrogeno significa prima di tutto produrre elettricità rinnovabile, e questo richiede superficie. È il vincolo che decide la scala di qualunque progetto, prima ancora del capitale disponibile: un elettrolizzatore si acquista, a differenza di un ettaro di terreno idoneo.
 
 La ricognizione che segue distingue le superfici per tipologia, perché differiscono per resa, per costo di connessione e soprattutto per accettabilità sociale. Una copertura industriale non sottrae suolo a nessuno e non richiede alcuna variante urbanistica; un impianto a terra su superficie agricola apre invece una discussione che va affrontata prima della progettazione, non dopo.
 

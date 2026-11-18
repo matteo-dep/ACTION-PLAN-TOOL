@@ -3,13 +3,11 @@
 Il percorso A risponde a una sola domanda: sul territorio comunale esiste qualcuno
 che ha bisogno di idrogeno, e per ragioni che nessuna altra tecnologia soddisfa?
 
-È una domanda meno ovvia di quanto sembri. L'idrogeno non è un combustibile
-migliore degli altri: è un vettore costoso da produrre, difficile da stoccare e
-soggetto a perdite di efficienza a ogni passaggio. Ha senso esattamente dove le
-alternative non arrivano, e non ha senso da nessun'altra parte. Cercare la domanda
-significa quindi separare i casi in cui l'idrogeno è necessario da quelli in cui
-sarebbe solo una scelta costosa, e il criterio di separazione non è l'ambizione
-dell'amministrazione ma la termodinamica.
+L'idrogeno è un vettore costoso da produrre, difficile da stoccare e soggetto a
+perdite di efficienza a ogni passaggio: conviene dove le alternative non arrivano.
+Cercare la domanda significa quindi separare i casi in cui l'idrogeno è necessario
+da quelli in cui sarebbe una scelta insostenibile, e il criterio di separazione è
+termodinamico prima che programmatico.
 
 L'analisi si articola in quattro rilevazioni, condotte con altrettanti strumenti
 del Toolkit:

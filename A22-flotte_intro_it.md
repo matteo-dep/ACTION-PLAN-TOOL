@@ -1,6 +1,6 @@
 ### Flotte e mobilità (Tool 2.2)
 
-Nel trasporto la gerarchia di intervento è la stessa dell'industria, ma i confini sono più netti. Per i mezzi leggeri e per le percorrenze urbane la batteria è oggi più efficiente, più economica e più matura: l'idrogeno vi sarebbe uno spreco di energia primaria, perché per ogni kilowattora impiegato alla ruota ne servono circa tre alla produzione.
+Nel trasporto la gerarchia di intervento è la stessa dell'industria, ma i confini sono più netti. Per i mezzi leggeri e per le percorrenze urbane la batteria è oggi più efficiente, più economica e più matura: l'idrogeno vi sarebbe uno spreco di energia primaria, perché per ogni kilowattora impiegato alla ruota ne servono circa tre alla produzione con una cella a combustibile, e fino a cinque o sei se la molecola viene bruciata in un motore a combustione interna. È una differenza che pesa sulla scelta della tecnologia di bordo, meno sul confronto con la batteria: anche nell'ipotesi migliore il divario con l'elettrico diretto resta di un fattore tre.
 
 Il vantaggio dell'idrogeno emerge dove la batteria incontra limiti fisici: autonomie elevate senza soste lunghe, carichi utili che il peso delle celle eroderebbe, mezzi in servizio continuo su più turni, temperature rigide che riducono la capacità disponibile. Sono le condizioni tipiche del trasporto pesante, dei mezzi di emergenza e dei servizi che non possono fermarsi.
 

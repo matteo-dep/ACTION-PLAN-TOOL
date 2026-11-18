@@ -1,8 +1,8 @@
-## Premessa: che cosa stiamo davvero misurando
+## Premessa: che cosa misura questo piano
 
-L'idrogeno non è un obiettivo, è uno strumento. L'obiettivo è ridurre le emissioni
-del territorio, e rispetto a quell'obiettivo l'idrogeno occupa una posizione precisa
-e circoscritta.
+L'obiettivo del piano è ridurre le emissioni del territorio. L'idrogeno è uno degli
+strumenti disponibili per farlo, e occupa rispetto a quell'obiettivo una posizione
+precisa e circoscritta.
 
 La gerarchia degli interventi di decarbonizzazione è ormai consolidata e non è
 opinabile. Al primo posto sta la riduzione dei consumi — isolare gli edifici,
@@ -35,7 +35,7 @@ quindi la sua possibilità di decarbonizzarsi con qualunque tecnologia.
 
 Le rilevazioni che seguono censiscono superfici disponibili, capacità residua della
 rete elettrica, consumi termici degli edifici pubblici, percorrenze e costi delle
-flotte comunali, processi industriali energivori. Sono esattamente le informazioni
+flotte comunali, processi industriali energivori. Sono le stesse informazioni
 che servono per un piano di elettrificazione, per un Piano d'Azione per l'Energia
 Sostenibile e il Clima, per una comunità energetica rinnovabile o per la
 programmazione degli interventi sul patrimonio edilizio.

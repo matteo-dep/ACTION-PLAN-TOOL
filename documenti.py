@@ -68,7 +68,11 @@ def blocchi_markdown(md: str):
             while i < len(righe) and righe[i].strip().startswith(">"):
                 nota.append(righe[i].strip().lstrip(">").strip())
                 i += 1
-            yield ("nota", " ".join(p for p in nota if p))
+            # Il riquadro e' reso con una multi_cell unica, che non interpreta il
+            # markdown: un **grassetto** scritto qui dentro finiva stampato con
+            # gli asterischi in chiaro. Il riquadro si distingue gia' per fondo e
+            # corsivo, quindi l'enfasi si toglie invece di stamparla.
+            yield ("nota", _senza_grassetto(" ".join(p for p in nota if p)))
             continue
         elif re.match(r"^([-*+]|\d{1,2}[.)])\s+", stripped):
             marc = re.match(r"^([-*+]|\d{1,2}[.)])\s+", stripped).group(1)
