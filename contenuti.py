@@ -150,23 +150,6 @@ RENDIMENTO_CALDAIA_H2 = 0.90     # caldaia a condensazione alimentata a idrogeno
 COP_POMPA_CALORE = 3.5           # media stagionale in pianura
 COP_POMPA_CALORE_MONTAGNA = 2.2  # zona climatica F, giornate di progetto
 
-# Sinergia depuratore-elettrolizzatore. L'elettrolisi produce 8 kg di ossigeno
-# per ogni kg di idrogeno: è il reagente che il depuratore oggi ottiene
-# comprimendo aria, la sua voce di consumo elettrico maggiore.
-RAPPORTO_O2_H2 = 8.0             # kg di ossigeno per kg di idrogeno
-# Valore prudenziale: 1,2 kg di ossigeno trasferito per kWh assorbito dai
-# compressori. È la resa che si ricava dal caso di riferimento (100.000 AE,
-# 70 g O2 per abitante equivalente al giorno) e tiene conto del rendimento
-# reale di trasferimento in vasca, sensibilmente inferiore a quello nominale
-# dei diffusori a bolle fini.
-RESA_AERAZIONE_KG_O2_KWH = 1.2
-# Fabbisogno di ossigeno per abitante equivalente: 70 g al giorno, valore di
-# riferimento per il fango attivo. E' il parametro che consente di partire dagli
-# abitanti equivalenti, che il Comune conosce, invece che dai kWh di aerazione,
-# che stanno nella bolletta del gestore.
-O2_PER_AE_KG_GIORNO = 0.070
-QUOTA_CALORE_ELETTROLISI = 0.35  # frazione dell'energia dissipata come calore
-
 # =============================================================================
 # STRUTTURA DEL PASSO 2
 # =============================================================================
@@ -205,7 +188,6 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T22_EMISSIONI_EVITATE_TCO2",
            "T12_FLAG_DEPURATORI", "T25_AERAZIONE_KWH_ANNO",
            "T25_POD_TERRA", "T25_POD_TETTI_CIV", "T25_POD_TETTI_IND",
-           "T25_ABITANTI_EQUIVALENTI",
            "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
            "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO",
            "T25_FER_INSTALLATA_MW", "T25_SAU_OCCUPATA_PERC", "T25_PIPELINE_ISTANZE",
@@ -248,6 +230,10 @@ def colonna_di_servizio(colonna: str) -> bool:
     return any(p in up for p in PREFISSI_TECNICI)
 
 
+# Colonne di governance: escluse dalla tabella "Altri dati disponibili" perche'
+# entrano gia' nel testo. T12_FLAG_HYDROGEN_VALLEY arrivava dal 2.3, chiuso: la
+# colonna conserva i dati storici ma nessuna sezione la legge piu', perche' la
+# domanda 17 del 1.2 sulla NAHV copre lo stesso ruolo con copertura migliore.
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
                    "T12_FLAG_JOINT_PROCUREMENT", "T12_FLAG_HYDROGEN_VALLEY"]
 
@@ -297,7 +283,6 @@ ETICHETTE = {
     "T25_POD_TERRA": "Punti di immissione sulle aree a terra",
     "T25_POD_TETTI_CIV": "Punti di immissione sulle coperture civili",
     "T25_POD_TETTI_IND": "Punti di immissione sulle coperture industriali",
-    "T25_ABITANTI_EQUIVALENTI": "Abitanti equivalenti serviti dal depuratore",
     "T24_FABBISOGNO_TERMICO_KWH_ANNO": "Fabbisogno termico degli edifici",
     "T24_SOLUZIONE_OTTIMALE": "Soluzione ottimale individuata",
     "T24_SOLUZIONE_PIU_PULITA": "Soluzione a minori emissioni",
@@ -1464,65 +1449,6 @@ TESTO_DEPURATORE = ("Il depuratore può ospitare la produzione di idrogeno invec
 
 
 
-def sinergia_depuratore(riga) -> str:
-    """Dimensiona l'elettrolizzatore che il depuratore potrebbe ospitare.
-
-    Il criterio non è la domanda di idrogeno ma il fabbisogno di ossigeno delle
-    vasche: si taglia l'elettrolizzatore su quello, e l'idrogeno diventa il
-    prodotto principale di un impianto nato per un'altra ragione.
-    """
-    ae = numero(riga.get("T25_ABITANTI_EQUIVALENTI"))
-    kwh = numero(riga.get("T25_AERAZIONE_KWH_ANNO"))
-    if ae:
-        # via diretta: l'ossigeno che le vasche consumano si ricava dal carico
-        # organico, che e' il dato che un Comune conosce davvero.
-        o2_anno = ae * O2_PER_AE_KG_GIORNO * 365
-        if not kwh:
-            kwh = o2_anno / RESA_AERAZIONE_KG_O2_KWH
-        base = (f"Il depuratore serve {circa(ae)} abitanti equivalenti. Con un "
-                f"fabbisogno di {decimale(O2_PER_AE_KG_GIORNO * 1000)} grammi di "
-                "ossigeno per abitante equivalente al giorno, le vasche ne "
-                f"consumano circa {circa(round(o2_anno / 1000))} tonnellate all'anno.")
-    elif kwh:
-        o2_anno = kwh * RESA_AERAZIONE_KG_O2_KWH
-        base = ""
-    else:
-        return ""
-    h2_anno = o2_anno / RAPPORTO_O2_H2
-    energia_mwh = h2_anno * CONSUMO_ELETTROLISI_KWH_KG / 1000
-    potenza_mw = energia_mwh * 1000 / 8000 / 1000      # esercizio quasi continuo
-    calore_kw = potenza_mw * 1000 * QUOTA_CALORE_ELETTROLISI
-    bus = h2_anno / (CONSUMO_BUS_KG_GIORNO * GIORNI_OPERATIVI)
-
-    out = ["", "| Grandezza | Valore |", "| --- | --- |"]
-    if ae:
-        out.append(f"| Abitanti equivalenti serviti | {circa(ae)} |")
-    out += [f"| Consumo per aerazione | {circa(kwh)} kWh/anno |",
-           f"| Ossigeno oggi richiesto dalle vasche | {circa(round(o2_anno / 1000))} t/anno |",
-           f"| Idrogeno associato a quell'ossigeno | {circa(round(h2_anno / 1000))} t/anno |",
-           f"| Taglia dell'elettrolizzatore | {formatta_numero(potenza_mw)} MW |",
-           f"| Calore di scarto recuperabile | {formatta_numero(round(calore_kw))} kW termici |", ""]
-
-    if base:
-        out.append(base)
-        out.append("")
-    out.append(f"Dimensionando l'elettrolizzatore sul fabbisogno di ossigeno delle vasche "
-               f"si otterrebbero circa **{circa(round(h2_anno / 1000))} tonnellate "
-               f"di idrogeno all'anno**, sufficienti ad alimentare l'equivalente di "
-               f"{circa(bus, 1)} autobus urbani. L'ossigeno smetterebbe di essere un "
-               "sottoprodotto da disperdere e diventerebbe il reagente che oggi si paga "
-               "sotto forma di energia per la compressione dell'aria.")
-    out.append("")
-    out.append("> Stima costruita su una resa di trasferimento di "
-               f"{formatta_numero(RESA_AERAZIONE_KG_O2_KWH)} kg di ossigeno per kWh e sul "
-               "rapporto di massa fisso 1:8 dell'elettrolisi. È un ordine di grandezza per "
-               "capire se la sinergia meriti uno studio dedicato: il dimensionamento reale "
-               "richiede il carico organico effettivo dell'impianto, espresso in abitanti "
-               "equivalenti, e la verifica della compatibilità fra il profilo di produzione "
-               "dell'ossigeno e quello del consumo delle vasche.")
-    return "\n".join(out)
-
-
 def sezione_depuratore(riga) -> str:
     """Il depuratore come sito di produzione (domanda del 2.5).
 
@@ -1530,14 +1456,15 @@ def sezione_depuratore(riga) -> str:
     impianto comunale che offre insieme acqua, un impiego per l'ossigeno
     dell'elettrolisi e uno per il calore di scarto. Con la chiusura del 2.3 la
     domanda e' passata al 2.5 e la sezione al percorso B, accanto alle aree.
+
+    Solo descrittiva: nessun questionario raccoglie piu' i driver fisici, e una
+    tabella che compare per i pochi Comuni con dati storici del 2.3 e sparisce
+    per tutti gli altri renderebbe i piani incoerenti fra loro.
     """
     if not vero(riga.get("T12_FLAG_DEPURATORI")):
         return ""
-    out = ["### Il depuratore come sito di produzione", "", TESTO_DEPURATORE, ""]
-    stima = sinergia_depuratore(riga)
-    if stima:
-        out.append(stima)
-    return "\n".join(out)
+    return "\n".join(["### Il depuratore come sito di produzione", "",
+                      TESTO_DEPURATORE, ""])
 
 TESTO_TERMICO_PREDEFINITO = """### Fabbisogno termico degli edifici pubblici (Tool 2.4)
 
@@ -3563,11 +3490,11 @@ def _sezione_attivita(riga, profilo) -> str:
             "rapporto fra costo ed effetto dell'intero piano."))
 
     # --- aggregazione
-    if vero(riga.get("T12_FLAG_JOINT_PROCUREMENT")) or vero(riga.get("T12_FLAG_HYDROGEN_VALLEY")):
+    if vero(riga.get("T12_FLAG_JOINT_PROCUREMENT")) or vero(riga.get("T12_FLAG_NAHV")):
         attivita.append((
             "Aggregazione della domanda",
-            "Il Comune ha già dichiarato disponibilità ad appalti congiunti o partecipa a "
-            "un progetto di Hydrogen Valley. L'aggregazione incide sulla scala: un "
+            "Il Comune ha già dichiarato disponibilità ad appalti congiunti o aderisce "
+            "alla North Adriatic Hydrogen Valley. L'aggregazione incide sulla scala: un "
             "impianto di produzione diventa sostenibile a partire da volumi che un "
             "Comune di medie dimensioni raramente raggiunge da solo, mentre l'insieme "
             "dei Comuni limitrofi li raggiunge. La disponibilità già dichiarata va "
@@ -4191,11 +4118,6 @@ def _sezione_sostenibilita(riga) -> str:
                          "punta a 5.000 tonnellate annue di idrogeno rinnovabile su scala "
                          "transfrontaliera: il fabbisogno locale rilevato va letto come "
                          "quota di quel target, non come progetto isolato.")
-    if vero(riga.get("T12_FLAG_HYDROGEN_VALLEY")):
-        obiettivi.append("Sul territorio insiste già un progetto di Hydrogen Valley "
-                         "finanziato: le azioni di questo piano vanno coordinate con "
-                         "quelle, per evitare che due infrastrutture si contendano la "
-                         "stessa domanda.")
     obiettivi.append("Il **PNIEC** assegna all'idrogeno rinnovabile un ruolo circoscritto "
                      "ai settori senza alternative: la coerenza con quel quadro non si "
                      "misura dalla quantità di idrogeno impiegata, ma dalla correttezza "
