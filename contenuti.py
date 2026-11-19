@@ -160,6 +160,11 @@ RAPPORTO_O2_H2 = 8.0             # kg di ossigeno per kg di idrogeno
 # reale di trasferimento in vasca, sensibilmente inferiore a quello nominale
 # dei diffusori a bolle fini.
 RESA_AERAZIONE_KG_O2_KWH = 1.2
+# Fabbisogno di ossigeno per abitante equivalente: 70 g al giorno, valore di
+# riferimento per il fango attivo. E' il parametro che consente di partire dagli
+# abitanti equivalenti, che il Comune conosce, invece che dai kWh di aerazione,
+# che stanno nella bolletta del gestore.
+O2_PER_AE_KG_GIORNO = 0.070
 QUOTA_CALORE_ELETTROLISI = 0.35  # frazione dell'energia dissipata come calore
 
 # =============================================================================
@@ -198,7 +203,9 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T22_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_ELETTRICO_MWH_ANNO",
            "T22_ENERGIA_ELETTROLISI_MWH_ANNO", "T22_DELTA_TCO_EURO",
            "T22_EMISSIONI_EVITATE_TCO2",
-           "T25_FLAG_DEPURATORI", "T25_AERAZIONE_KWH_ANNO",
+           "T12_FLAG_DEPURATORI", "T25_AERAZIONE_KWH_ANNO",
+           "T25_POD_TERRA", "T25_POD_TETTI_CIV", "T25_POD_TETTI_IND",
+           "T25_ABITANTI_EQUIVALENTI",
            "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
            "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO",
            "T25_FER_INSTALLATA_MW", "T25_SAU_OCCUPATA_PERC", "T25_PIPELINE_ISTANZE",
@@ -285,8 +292,12 @@ ETICHETTE = {
     "T22_ENERGIA_ELETTROLISI_MWH_ANNO": "Energia richiesta dall'elettrolisi",
     "T22_DELTA_TCO_EURO": "Differenziale di costo totale di possesso",
     "T22_EMISSIONI_EVITATE_TCO2": "Emissioni evitate",
-    "T25_FLAG_DEPURATORI": "Impianti di depurazione",
+    "T12_FLAG_DEPURATORI": "Depuratori o impianti di trattamento rifiuti",
     "T25_AERAZIONE_KWH_ANNO": "Consumo per aerazione depuratori",
+    "T25_POD_TERRA": "Punti di immissione sulle aree a terra",
+    "T25_POD_TETTI_CIV": "Punti di immissione sulle coperture civili",
+    "T25_POD_TETTI_IND": "Punti di immissione sulle coperture industriali",
+    "T25_ABITANTI_EQUIVALENTI": "Abitanti equivalenti serviti dal depuratore",
     "T24_FABBISOGNO_TERMICO_KWH_ANNO": "Fabbisogno termico degli edifici",
     "T24_SOLUZIONE_OTTIMALE": "Soluzione ottimale individuata",
     "T24_SOLUZIONE_PIU_PULITA": "Soluzione a minori emissioni",
@@ -1460,24 +1471,41 @@ def sinergia_depuratore(riga) -> str:
     vasche: si taglia l'elettrolizzatore su quello, e l'idrogeno diventa il
     prodotto principale di un impianto nato per un'altra ragione.
     """
+    ae = numero(riga.get("T25_ABITANTI_EQUIVALENTI"))
     kwh = numero(riga.get("T25_AERAZIONE_KWH_ANNO"))
-    if not kwh:
+    if ae:
+        # via diretta: l'ossigeno che le vasche consumano si ricava dal carico
+        # organico, che e' il dato che un Comune conosce davvero.
+        o2_anno = ae * O2_PER_AE_KG_GIORNO * 365
+        if not kwh:
+            kwh = o2_anno / RESA_AERAZIONE_KG_O2_KWH
+        base = (f"Il depuratore serve {circa(ae)} abitanti equivalenti. Con un "
+                f"fabbisogno di {decimale(O2_PER_AE_KG_GIORNO * 1000)} grammi di "
+                "ossigeno per abitante equivalente al giorno, le vasche ne "
+                f"consumano circa {circa(round(o2_anno / 1000))} tonnellate all'anno.")
+    elif kwh:
+        o2_anno = kwh * RESA_AERAZIONE_KG_O2_KWH
+        base = ""
+    else:
         return ""
-
-    o2_anno = kwh * RESA_AERAZIONE_KG_O2_KWH
     h2_anno = o2_anno / RAPPORTO_O2_H2
     energia_mwh = h2_anno * CONSUMO_ELETTROLISI_KWH_KG / 1000
     potenza_mw = energia_mwh * 1000 / 8000 / 1000      # esercizio quasi continuo
     calore_kw = potenza_mw * 1000 * QUOTA_CALORE_ELETTROLISI
     bus = h2_anno / (CONSUMO_BUS_KG_GIORNO * GIORNI_OPERATIVI)
 
-    out = ["", "| Grandezza | Valore |", "| --- | --- |",
-           f"| Consumo per aerazione | {formatta_numero(kwh)} kWh/anno |",
+    out = ["", "| Grandezza | Valore |", "| --- | --- |"]
+    if ae:
+        out.append(f"| Abitanti equivalenti serviti | {circa(ae)} |")
+    out += [f"| Consumo per aerazione | {circa(kwh)} kWh/anno |",
            f"| Ossigeno oggi richiesto dalle vasche | {circa(round(o2_anno / 1000))} t/anno |",
            f"| Idrogeno associato a quell'ossigeno | {circa(round(h2_anno / 1000))} t/anno |",
            f"| Taglia dell'elettrolizzatore | {formatta_numero(potenza_mw)} MW |",
            f"| Calore di scarto recuperabile | {formatta_numero(round(calore_kw))} kW termici |", ""]
 
+    if base:
+        out.append(base)
+        out.append("")
     out.append(f"Dimensionando l'elettrolizzatore sul fabbisogno di ossigeno delle vasche "
                f"si otterrebbero circa **{circa(round(h2_anno / 1000))} tonnellate "
                f"di idrogeno all'anno**, sufficienti ad alimentare l'equivalente di "
@@ -1503,7 +1531,7 @@ def sezione_depuratore(riga) -> str:
     dell'elettrolisi e uno per il calore di scarto. Con la chiusura del 2.3 la
     domanda e' passata al 2.5 e la sezione al percorso B, accanto alle aree.
     """
-    if not vero(riga.get("T25_FLAG_DEPURATORI")):
+    if not vero(riga.get("T12_FLAG_DEPURATORI")):
         return ""
     out = ["### Il depuratore come sito di produzione", "", TESTO_DEPURATORE, ""]
     stima = sinergia_depuratore(riga)
@@ -1699,6 +1727,60 @@ agricola apre una discussione che va affrontata prima della progettazione, non d
 """
 
 
+AREE_A_TERRA = ("Aree dismesse (brownfield)", "Superfici incolte",
+                "Superficie agricola utilizzata", "Aree gravate da servitù")
+AREE_SU_TETTO = ("Coperture industriali", "Coperture civili")
+# Un punto di immissione ogni tot ettari: oltre questa soglia la superficie non
+# e' collegabile a quello esistente e serve una nuova cabina. Valore di
+# riferimento, non normativo: serve a distinguere "collegabile" da "da connettere".
+ETTARI_PER_POD = 2.0
+
+
+def _ettari(n) -> str:
+    """'1 ettaro' / '21 ettari': il singolare va trattato, non arrotondato via."""
+    testo = circa(n)
+    return f"{testo} ettaro" if testo in ("1", "-1") else f"{testo} ettari"
+
+
+def _commento_pod(disponibili: dict, pod_terra, pod_tetti) -> str:
+    """Confronta superficie e punti di immissione dichiarati.
+
+    La superficie da sola non dice se l'energia puo' uscire: senza un punto di
+    immissione il collegamento va realizzato da zero, e quel costo non entra
+    nelle stime del 2.6. E' il caso tipico delle aree lungo autostrada e
+    ferrovia, idonee per legge ma spesso prive di connessione.
+    """
+    terra = sum(v for n, v in disponibili.items() if n in AREE_A_TERRA)
+    tetti = sum(v for n, v in disponibili.items() if n in AREE_SU_TETTO)
+    frasi = []
+
+    for etichetta_area, mq, pod in (("a terra", terra, pod_terra),
+                                    ("sulle coperture", tetti, pod_tetti)):
+        if mq <= 0:
+            continue
+        ettari = mq / 10000
+        if not pod:
+            frasi.append(f"Le superfici {etichetta_area} coprono "
+                         f"{_ettari(ettari)} **senza alcun punto di immissione "
+                         "dichiarato**: il collegamento alla rete andrebbe realizzato ex "
+                         "novo, e il relativo costo non è compreso nelle stime di "
+                         "investimento del tool 2.6.")
+            continue
+        per_pod = ettari / pod
+        if per_pod > ETTARI_PER_POD:
+            frasi.append(f"Le superfici {etichetta_area} dispongono di {circa(pod)} punti "
+                         f"di immissione per {_ettari(ettari)}, pari a "
+                         f"{decimale(per_pod)} ettari per punto. La distribuzione è "
+                         "rada: una parte della superficie richiederà una connessione "
+                         "dedicata, che va preventivata a parte.")
+        else:
+            frasi.append(f"Le superfici {etichetta_area} dispongono di {circa(pod)} punti "
+                         f"di immissione per {_ettari(ettari)}, pari a "
+                         f"{decimale(per_pod)} ettari per punto: la rete è già presente "
+                         "dove serve e il collegamento resta un'opera di allacciamento.")
+    return " ".join(frasi)
+
+
 def sezione_aree(riga) -> str:
     """Sezione 2.5: superfici, rete elettrica e attrito territoriale."""
     aree = {
@@ -1716,6 +1798,13 @@ def sezione_aree(riga) -> str:
     programmabili = numero(riga.get("T25_PROGRAMMABILI_MW"))
     cap_rete = numero(riga.get("T25_CAPACITA_RESIDUA_MW"))
     distanza = numero(riga.get("T25_DISTANZA_CABINA_PRIMARIA_KM"))
+    pod_terra = numero(riga.get("T25_POD_TERRA"))
+    # lo smistatore tiene separate coperture civili e industriali: qui servono
+    # sommate, perche' per la connessione si comportano allo stesso modo.
+    pod_civ = numero(riga.get("T25_POD_TETTI_CIV"))
+    pod_ind = numero(riga.get("T25_POD_TETTI_IND"))
+    pod_tetti = (None if pod_civ is None and pod_ind is None
+                 else (pod_civ or 0) + (pod_ind or 0))
     sau_occupata = numero(riga.get("T25_SAU_OCCUPATA_PERC"))
     istanze = numero(riga.get("T25_PIPELINE_ISTANZE"))
     autorizzati = numero(riga.get("T25_PROGETTI_AUTORIZZATI"))
@@ -1765,7 +1854,7 @@ def sezione_aree(riga) -> str:
             out.append("")
 
     # --- rete elettrica
-    if cap_rete is not None or distanza is not None:
+    if cap_rete is not None or distanza is not None or pod_terra or pod_tetti:
         out.append("#### Connessione alla rete")
         righe = []
         if fer is not None:
@@ -1778,7 +1867,14 @@ def sezione_aree(riga) -> str:
             righe.append(f"| Distanza dalla cabina primaria | {formatta_numero(distanza)} km |")
         if not is_vuoto(riga.get("T25_ENTRO_5KM_DORSALE")):
             righe.append(f"| Entro 5 km dalla dorsale | {formatta(riga['T25_ENTRO_5KM_DORSALE'], 'T25_ENTRO_5KM_DORSALE')} |")
+        if pod_terra is not None:
+            righe.append(f"| Punti di immissione sulle aree a terra | {circa(pod_terra)} |")
+        if pod_tetti is not None:
+            righe.append(f"| Punti di immissione sulle coperture | {circa(pod_tetti)} |")
         out += ["| Parametro | Valore |", "| --- | --- |"] + righe + [""]
+        commento = _commento_pod(disponibili, pod_terra, pod_tetti)
+        if commento:
+            out += [commento, ""]
 
         if distanza is not None:
             if distanza <= 3:
@@ -3446,7 +3542,7 @@ def _sezione_attivita(riga, profilo) -> str:
                       "taglia della macchina da installare, qualunque essa sia.")
         attivita.append(("Edifici pubblici ad alto fabbisogno", testo))
 
-    if vero(riga.get("T25_FLAG_DEPURATORI")):
+    if vero(riga.get("T12_FLAG_DEPURATORI")):
         attivita.append((
             "Depuratore come sito di produzione",
             "Il depuratore comunale può ospitare la produzione di idrogeno: è l'unico "
