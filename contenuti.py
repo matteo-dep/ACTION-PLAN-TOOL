@@ -150,25 +150,6 @@ RENDIMENTO_CALDAIA_H2 = 0.90     # caldaia a condensazione alimentata a idrogeno
 COP_POMPA_CALORE = 3.5           # media stagionale in pianura
 COP_POMPA_CALORE_MONTAGNA = 2.2  # zona climatica F, giornate di progetto
 
-# --- Parametri per la stima dei fabbisogni di nicchia (Tool 2.3) -------------
-# Conversioni usate per tradurre i driver fisici raccolti dal questionario in
-# chilogrammi di idrogeno. Sono ordini di grandezza dichiarati, non valori di
-# progetto: servono a capire se una nicchia pesa quanto un mezzo o quanto una
-# flotta, non a dimensionare un impianto.
-RESA_FUEL_CELL_KWH_KG = 17.0     # kWh elettrici da 1 kg di H2 (PEMFC, ~50%)
-CONSUMO_TRENO_KG_KM = 0.25       # automotrice a idrogeno su tratta regionale
-# Carrello elevatore a celle a combustibile: si misura in ore di servizio, non
-# in potenza installata. Nella logistica del freddo i mezzi restano in moto anche
-# a vuoto, per evitare il congelamento di impianti idraulici e ausiliari.
-ORE_CARRELLO_GIORNO = 8.0        # turno tipico
-CONSUMO_CARRELLO_KG_ORA = 0.20   # consumo medio di un carrello FC in esercizio
-FATTORE_CARICO_FREDDO = 0.80     # quota del turno effettivamente in movimento
-
-# Mezzi a ciclo di lavoro gravoso (battipista, soccorso): il confronto va fatto
-# sui litri consumati, non sui chilometri, perché lavorano ad alta coppia e con
-# lunghi stazionamenti a motore acceso.
-LITRI_DIESEL_PER_KG_H2_GRAVOSO = 3.2
-
 # Sinergia depuratore-elettrolizzatore. L'elettrolisi produce 8 kg di ossigeno
 # per ogni kg di idrogeno: è il reagente che il depuratore oggi ottiene
 # comprimendo aria, la sua voce di consumo elettrico maggiore.
@@ -180,27 +161,6 @@ RAPPORTO_O2_H2 = 8.0             # kg di ossigeno per kg di idrogeno
 # dei diffusori a bolle fini.
 RESA_AERAZIONE_KG_O2_KWH = 1.2
 QUOTA_CALORE_ELETTROLISI = 0.35  # frazione dell'energia dissipata come calore
-
-NICCHIE = {
-    "T23_FLAG_RIFUGI":
-        "rifugi e utenze isolate, dove l'idrogeno compete con il generatore diesel "
-        "e con la logistica di rifornimento in quota",
-    "T23_FLAG_MEZZI_CRITICI":
-        "mezzi di emergenza e protezione civile, per i quali la continuità operativa "
-        "conta più del costo del carburante",
-    "T23_FLAG_COLD_STORAGE":
-        "logistica del freddo e movimentazione in magazzino, dove i carrelli a celle a "
-        "combustibile evitano la sostituzione delle batterie fra i turni",
-    "T23_FLAG_TRENI":
-        "trasporto ferroviario su tratte non elettrificate, alternativa all'elettrificazione "
-        "quando i volumi di traffico non la giustificano",
-    "T23_FLAG_PORTI_AEROPORTI":
-        "movimentazione portuale o aeroportuale, con mezzi a ciclo continuo e rifornimento "
-        "concentrato in pochi punti",
-    "T23_FLAG_DEPURATORI":
-        "impianti di depurazione, dove il consumo per aerazione è costante e prevedibile "
-        "e può essere accoppiato a produzione locale",
-}
 
 # =============================================================================
 # STRUTTURA DEL PASSO 2
@@ -238,12 +198,7 @@ ESCLUSE = {"T11_MAIL", COL_ID, COL_NOME, COL_MATURITA,
            "T22_FABBISOGNO_H2_TON_ANNO", "T22_FABBISOGNO_ELETTRICO_MWH_ANNO",
            "T22_ENERGIA_ELETTROLISI_MWH_ANNO", "T22_DELTA_TCO_EURO",
            "T22_EMISSIONI_EVITATE_TCO2",
-           "T23_FLAG_RIFUGI", "T23_FLAG_MEZZI_CRITICI", "T23_FLAG_COLD_STORAGE",
-           "T23_FLAG_TRENI", "T23_FLAG_PORTI_AEROPORTI", "T23_FLAG_DEPURATORI",
-           "T23_RIFUGI_ELETTRICO_KWH", "T23_GASOLIO_FLOTTA_LITRI_ANNO",
-           "T23_N_CARRELLI", "T23_POTENZA_CARRELLI_KW",
-           "T23_TRATTA_NON_ELETTRIFICATA_KM", "T23_CORSE_GIORNALIERE",
-           "T23_AERAZIONE_KWH_ANNO", "T23_N_MEZZI_SPECIALI", "T23_MEZZI_FUEL_CELL",
+           "T25_FLAG_DEPURATORI", "T25_AERAZIONE_KWH_ANNO",
            "T24_FABBISOGNO_TERMICO_KWH_ANNO", "T24_SOLUZIONE_OTTIMALE",
            "T24_SOLUZIONE_PIU_PULITA", "T24_EMISSIONI_EVITATE_KGCO2_ANNO",
            "T25_FER_INSTALLATA_MW", "T25_SAU_OCCUPATA_PERC", "T25_PIPELINE_ISTANZE",
@@ -287,7 +242,7 @@ def colonna_di_servizio(colonna: str) -> bool:
 
 
 FLAG_GOVERNANCE = ["T12_FLAG_PIANIFICAZIONE", "T12_FLAG_NAHV",
-                   "T12_FLAG_JOINT_PROCUREMENT", "T23_FLAG_HYDROGEN_VALLEY"]
+                   "T12_FLAG_JOINT_PROCUREMENT", "T12_FLAG_HYDROGEN_VALLEY"]
 
 # =============================================================================
 # FORMATTAZIONE AUTOMATICA
@@ -330,18 +285,8 @@ ETICHETTE = {
     "T22_ENERGIA_ELETTROLISI_MWH_ANNO": "Energia richiesta dall'elettrolisi",
     "T22_DELTA_TCO_EURO": "Differenziale di costo totale di possesso",
     "T22_EMISSIONI_EVITATE_TCO2": "Emissioni evitate",
-    "T23_FLAG_RIFUGI": "Rifugi o utenze isolate",
-    "T23_FLAG_MEZZI_CRITICI": "Mezzi critici o di emergenza",
-    "T23_FLAG_COLD_STORAGE": "Celle frigorifere e logistica del freddo",
-    "T23_FLAG_TRENI": "Trasporto ferroviario",
-    "T23_FLAG_PORTI_AEROPORTI": "Porti o aeroporti",
-    "T23_FLAG_DEPURATORI": "Impianti di depurazione",
-    "T23_RIFUGI_ELETTRICO_KWH": "Consumo elettrico dei rifugi",
-    "T23_GASOLIO_FLOTTA_LITRI_ANNO": "Gasolio consumato dalla flotta",
-    "T23_N_CARRELLI": "Carrelli elevatori",
-    "T23_TRATTA_NON_ELETTRIFICATA_KM": "Tratta ferroviaria non elettrificata",
-    "T23_CORSE_GIORNALIERE": "Corse giornaliere",
-    "T23_AERAZIONE_KWH_ANNO": "Consumo per aerazione depuratori",
+    "T25_FLAG_DEPURATORI": "Impianti di depurazione",
+    "T25_AERAZIONE_KWH_ANNO": "Consumo per aerazione depuratori",
     "T24_FABBISOGNO_TERMICO_KWH_ANNO": "Fabbisogno termico degli edifici",
     "T24_SOLUZIONE_OTTIMALE": "Soluzione ottimale individuata",
     "T24_SOLUZIONE_PIU_PULITA": "Soluzione a minori emissioni",
@@ -400,9 +345,7 @@ ETICHETTE = {
     "T28_BREAK_EVEN_EURO_KG": "Prezzo di pareggio alla pompa",
     "T28_ORIZZONTE": "Orizzonte temporale",
     "T28_QUOTA_FCEV_PERC": "Quota di veicoli a celle a combustibile",
-    "T23_N_MEZZI_SPECIALI": "Mezzi speciali censiti",
-    "T23_MEZZI_FUEL_CELL": "Mezzi convertibili a celle a combustibile",
-    "T23_FLAG_HYDROGEN_VALLEY": "Hydrogen Valley già finanziata nell'area",
+    "T12_FLAG_HYDROGEN_VALLEY": "Hydrogen Valley già finanziata nell'area",
     "T25_SUP_PUBBLICA_MQ": "Superfici di proprietà pubblica",
     "T25_PV_TERRA_INSTALLATO_MW": "Fotovoltaico a terra già installato",
     "T25_PROGRAMMABILI_MW": "Fonti programmabili in esercizio",
@@ -813,7 +756,7 @@ def testo_profilo(profilo: str, punteggi: dict) -> str:
 
 QUESTIONARI_PERCORSO = {
     "A": ["il 2.1 (industria Hard-to-Abate)", "il 2.2 (flotte e TCO)",
-          "il 2.3 (usi di nicchia)", "il 2.4 (fabbisogno termico)"],
+          "il 2.4 (fabbisogno termico)"],
     "B": ["il 2.5 (aree e potenziale rinnovabile)",
           "il 2.6 (dimensionamento della produzione)"],
     "C": ["il 2.7 (vocazione al transito)", "il 2.8 (progetto della stazione)"],
@@ -1478,174 +1421,35 @@ def sezione_flotte(riga) -> str:
 
 
 
-TESTO_NICCHIE_PREDEFINITO = """### Usi di nicchia (Tool 2.3)
-
-Accanto all'industria e alle flotte esistono impieghi in cui l'idrogeno compete su
-requisiti diversi dal solo costo: la continuità del servizio, l'assenza di rete
-elettrica adeguata, il tempo di rifornimento fra un turno e l'altro. Sono volumi
-contenuti, ma hanno un valore che il conto economico non cattura: rendono la
-tecnologia visibile alla comunità e costruiscono le competenze tecniche
-dell'amministrazione a costi contenuti.
-
-Per questo motivo gli usi di nicchia sono spesso i candidati naturali della prima
-fase di un percorso comunale, anche quando il grosso della domanda sta altrove.
-"""
-
-# Per ogni nicchia: descrizione, colonna del driver fisico, e come si converte
-# quel driver in un fabbisogno annuo di idrogeno.
-DETTAGLIO_NICCHIE = {
-    "T23_FLAG_RIFUGI": {
-        "titolo": "Rifugi e utenze isolate",
-        "testo": "Sono utenze fuori rete, alimentate da generatori diesel il cui "
-                 "combustibile arriva in quota con elicottero o con mezzi cingolati, a un "
-                 "costo di trasporto che spesso supera quello del carburante stesso. Una "
-                 "cella a combustibile elimina il rumore — che in un rifugio d'alta quota "
-                 "non è un dettaglio ma la ragione per cui il generatore viene spento la "
-                 "notte — azzera le emissioni locali e toglie il rischio di sversamento in "
-                 "aree di pregio ambientale, dove una perdita comporta bonifiche costose e "
-                 "danni reputazionali.\n\n"
-                 "Il vincolo si sposta però tutto sulla logistica: le bombole a 200 bar "
-                 "hanno una densità energetica per volume molto inferiore al gasolio, "
-                 "quindi a parità di autonomia servono più viaggi. Prima di considerare la "
-                 "conversione un vantaggio va confrontato il numero di rotazioni annue "
-                 "necessarie con quelle attuali, e valutata l'alternativa di un impianto "
-                 "fotovoltaico con accumulo, che in molti rifugi copre già gran parte del "
-                 "fabbisogno estivo, quando la frequentazione è massima.",
-        "driver": "T23_RIFUGI_ELETTRICO_KWH",
-        "unita": "kWh/anno",
-        "kg": lambda v: v / RESA_FUEL_CELL_KWH_KG,
-    },
-    "T23_FLAG_MEZZI_CRITICI": {
-        "titolo": "Mezzi critici e comprensori",
-        "testo": "Battipista, mezzi di soccorso e di protezione civile hanno un "
-                 "requisito che il costo non esprime: devono funzionare quando serve, e "
-                 "quando serve è quasi sempre la condizione peggiore. Le batterie perdono "
-                 "capacità proprio sotto zero, e un mezzo che deve garantire otto ore di "
-                 "lavoro continuo a meno dieci gradi non può permettersi una riserva "
-                 "incerta.\n\n"
-                 "A questo si aggiunge il ciclo di lavoro. Un battipista non percorre "
-                 "chilometri, eroga coppia in salita su neve per l'intero turno, con "
-                 "consumi che si misurano in litri all'ora e non in litri per cento "
-                 "chilometri. I mezzi di soccorso alternano lunghi stazionamenti a motore "
-                 "acceso — per alimentare apparecchiature e riscaldamento — a picchi di "
-                 "potenza improvvisi. In entrambi i casi il rifornimento in pochi minuti "
-                 "vale più dell'efficienza, perché il mezzo deve tornare operativo, non "
-                 "restare in ricarica.\n\n"
-                 "Sono impieghi a volume contenuto ma ad altissima visibilità: un mezzo "
-                 "comunale a idrogeno che opera durante un'emergenza fa per la percezione "
-                 "pubblica della tecnologia più di qualunque campagna informativa.",
-        "driver": "T23_GASOLIO_FLOTTA_LITRI_ANNO",
-        "unita": "litri di gasolio/anno",
-        "kg": lambda v: v / LITRI_DIESEL_PER_KG_H2_GRAVOSO,
-    },
-    "T23_FLAG_COLD_STORAGE": {
-        "titolo": "Logistica del freddo e movimentazione",
-        "testo": "Nei magazzini a ciclo continuo i carrelli elevatori elettrici "
-                 "impongono la sostituzione delle batterie fra un turno e l'altro: servono "
-                 "batterie di scorta, un locale dedicato alla ricarica con la ventilazione "
-                 "prescritta, e il tempo che l'operatore impiega nel cambio. La cella a "
-                 "combustibile si rifornisce in tre minuti alla stessa colonnina, senza "
-                 "batterie di riserva e senza locale tecnico: lo spazio recuperato è "
-                 "superficie di magazzino che torna a produrre reddito.\n\n"
-                 "Nella logistica del freddo il vantaggio si amplifica. Le batterie al "
-                 "piombo perdono fino a un terzo della capacità in cella frigorifera, "
-                 "mentre la cella a combustibile mantiene tensione costante fino a "
-                 "esaurimento e produce calore che giova alla cabina dell'operatore. È il "
-                 "motivo per cui questa è l'applicazione con la storia commerciale più "
-                 "lunga: decine di migliaia di carrelli a idrogeno operano da anni nei "
-                 "centri di distribuzione, in configurazioni che non hanno più nulla di "
-                 "sperimentale.\n\n"
-                 "Il caso d'uso è però quasi sempre privato: il ruolo dell'amministrazione "
-                 "è mettere in contatto l'operatore logistico con il progetto di "
-                 "produzione, non realizzare l'impianto.",
-        "driver": "T23_N_CARRELLI",
-        "unita": "carrelli",
-        "kg": lambda v: v * CONSUMO_CARRELLO_KG_ORA * ORE_CARRELLO_GIORNO
-                        * FATTORE_CARICO_FREDDO * GIORNI_LOGISTICA,
-    },
-    "T23_FLAG_TRENI": {
-        "titolo": "Trasporto ferroviario su tratte non elettrificate",
-        "testo": "Elettrificare una linea ferroviaria costa fra uno e due milioni di euro "
-                 "al chilometro e richiede anni di cantiere, con interruzioni del servizio "
-                 "e opere civili su ponti e gallerie. Dove i volumi di traffico non "
-                 "giustificano quell'investimento, l'automotrice a idrogeno consente di "
-                 "eliminare il gasolio senza toccare l'infrastruttura: un unico punto di "
-                 "rifornimento in deposito sostituisce centinaia di chilometri di linea "
-                 "aerea.\n\n"
-                 "È anche la nicchia con i volumi più alti fra quelle qui considerate. Un "
-                 "servizio regionale su una tratta di media lunghezza consuma quantità di "
-                 "idrogeno paragonabili a quelle di un'intera flotta di autobus urbani, e "
-                 "lo fa con una domanda concentrata in un solo punto e prevedibile "
-                 "sull'intero orario di servizio. Per un progetto di produzione locale è la "
-                 "condizione migliore possibile: un cliente unico, contrattualizzabile, che "
-                 "ritira ogni giorno la stessa quantità.\n\n"
-                 "Il confronto va comunque condotto sul costo di ciclo di vita completo, "
-                 "considerando che il materiale rotabile a idrogeno costa oggi "
-                 "sensibilmente più di quello diesel e che la decisione compete al gestore "
-                 "del servizio, non al Comune. Il ruolo dell'amministrazione è segnalare la "
-                 "disponibilità di idrogeno locale nel momento in cui la Regione programma "
-                 "il rinnovo della flotta.",
-        "driver": "T23_TRATTA_NON_ELETTRIFICATA_KM",
-        "unita": "km di tratta",
-        "kg": None,     # serve anche il numero di corse: calcolato a parte
-    },
-    "T23_FLAG_PORTI_AEROPORTI": {
-        "titolo": "Movimentazione portuale e aeroportuale",
-        "testo": "I mezzi di piazzale lavorano a ciclo continuo su percorsi "
-                 "brevi e ripetitivi, rientrando ogni sera in aree ristrette e sorvegliate: "
-                 "è la configurazione ideale per un rifornimento concentrato in pochi punti, "
-                 "senza bisogno di una rete distributiva. La domanda è prevedibile giorno "
-                 "per giorno e appartiene a un unico soggetto, quindi è "
-                 "contrattualizzabile: sono le due condizioni che rendono un impianto "
-                 "finanziabile.\n\n"
-                 "In ambito portuale si aggiunge la prospettiva del **cold ironing** e "
-                 "dell'alimentazione delle navi all'ormeggio, che sposta il fabbisogno su "
-                 "un ordine di grandezza superiore, e la possibilità di ricevere idrogeno "
-                 "via nave o via ammoniaca. Un porto non è quindi solo un consumatore ma "
-                 "un potenziale nodo di importazione, il che cambia la natura del progetto: "
-                 "da locale a infrastrutturale.\n\n"
-                 "L'interlocutore è l'autorità portuale o il gestore aeroportuale, e i "
-                 "tempi decisionali seguono i piani regolatori di quegli enti, non quelli "
-                 "comunali.",
-        "driver": None,
-        "unita": "",
-        "kg": None,
-    },
-    "T23_FLAG_DEPURATORI": {
-        "titolo": "Impianti di depurazione",
-        "testo": "Il depuratore può ospitare la produzione di idrogeno invece di "
-                 "consumarlo, per una ragione che nessun altro impianto comunale "
-                 "offre. L'elettrolisi genera otto chilogrammi di ossigeno puro per ogni "
-                 "chilogrammo di idrogeno, e l'ossigeno è il reagente che le "
-                 "vasche a fanghi attivi consumano: oggi lo si ottiene comprimendo aria, "
-                 "operazione che rappresenta la voce di consumo elettrico più alta "
-                 "dell'intero impianto, spesso oltre la metà del totale. Sostituire l'aria "
-                 "con ossigeno puro migliora inoltre la resa del processo biologico, "
-                 "perché aumenta la concentrazione disponibile ai batteri.\n\n"
-                 "La seconda sinergia è l'acqua. L'elettrolisi richiede acqua "
-                 "demineralizzata in quantità modeste — circa undici litri per chilogrammo "
-                 "di idrogeno — mentre un depuratore ne tratta ogni giorno migliaia di "
-                 "metri cubi e dispone già di prelievo, pompaggio e competenze per "
-                 "gestirli. Il prelievo dell'elettrolizzatore resta nell'ordine di un "
-                 "millesimo della portata trattata: una risorsa di fatto illimitata e "
-                 "senza costo aggiuntivo.\n\n"
-                 "La terza è il calore. Lo stack dissipa in calore circa un terzo "
-                 "dell'energia assorbita, disponibile a 55-60 °C: è la temperatura giusta "
-                 "per mantenere i digestori anaerobici in regime mesofilo, intorno ai 37 "
-                 "gradi. Recuperarlo evita di bruciare parte del biogas autoprodotto per "
-                 "riscaldare i fanghi, lasciandolo interamente disponibile per la "
-                 "trasformazione in biometano — che a sua volta può diventare idrogeno a "
-                 "basse emissioni senza passare dall'elettrolisi.\n\n"
-                 "Infine il profilo di carico. Un depuratore assorbe energia in modo "
-                 "pressoché costante tutto l'anno, senza le punte tipiche di altre utenze: "
-                 "accoppiato a un elettrolizzatore diventa un punto di flessibilità per la "
-                 "rete locale, capace di assorbire i surplus di produzione rinnovabile nei "
-                 "momenti in cui verrebbero altrimenti dispersi.",
-        "driver": None,          # trattato a parte: è produzione, non consumo
-        "unita": "",
-        "kg": None,
-    },
-}
+# Testo lungo del depuratore, tenuto fuori dalla funzione che lo stampa.
+TESTO_DEPURATORE = ("Il depuratore può ospitare la produzione di idrogeno invece di "
+    "consumarlo, per una ragione che nessun altro impianto comunale "
+    "offre. L'elettrolisi genera otto chilogrammi di ossigeno puro per ogni "
+    "chilogrammo di idrogeno, e l'ossigeno è il reagente che le "
+    "vasche a fanghi attivi consumano: oggi lo si ottiene comprimendo aria, "
+    "operazione che rappresenta la voce di consumo elettrico più alta "
+    "dell'intero impianto, spesso oltre la metà del totale. Sostituire l'aria "
+    "con ossigeno puro migliora inoltre la resa del processo biologico, "
+    "perché aumenta la concentrazione disponibile ai batteri.\n\n"
+    "La seconda sinergia è l'acqua. L'elettrolisi richiede acqua "
+    "demineralizzata in quantità modeste — circa undici litri per chilogrammo "
+    "di idrogeno — mentre un depuratore ne tratta ogni giorno migliaia di "
+    "metri cubi e dispone già di prelievo, pompaggio e competenze per "
+    "gestirli. Il prelievo dell'elettrolizzatore resta nell'ordine di un "
+    "millesimo della portata trattata: una risorsa di fatto illimitata e "
+    "senza costo aggiuntivo.\n\n"
+    "La terza è il calore. Lo stack dissipa in calore circa un terzo "
+    "dell'energia assorbita, disponibile a 55-60 °C: è la temperatura giusta "
+    "per mantenere i digestori anaerobici in regime mesofilo, intorno ai 37 "
+    "gradi. Recuperarlo evita di bruciare parte del biogas autoprodotto per "
+    "riscaldare i fanghi, lasciandolo interamente disponibile per la "
+    "trasformazione in biometano — che a sua volta può diventare idrogeno a "
+    "basse emissioni senza passare dall'elettrolisi.\n\n"
+    "Infine il profilo di carico. Un depuratore assorbe energia in modo "
+    "pressoché costante tutto l'anno, senza le punte tipiche di altre utenze: "
+    "accoppiato a un elettrolizzatore diventa un punto di flessibilità per la "
+    "rete locale, capace di assorbire i surplus di produzione rinnovabile nei "
+    "momenti in cui verrebbero altrimenti dispersi.")
 
 
 
@@ -1656,7 +1460,7 @@ def sinergia_depuratore(riga) -> str:
     vasche: si taglia l'elettrolizzatore su quello, e l'idrogeno diventa il
     prodotto principale di un impianto nato per un'altra ragione.
     """
-    kwh = numero(riga.get("T23_AERAZIONE_KWH_ANNO"))
+    kwh = numero(riga.get("T25_AERAZIONE_KWH_ANNO"))
     if not kwh:
         return ""
 
@@ -1691,94 +1495,21 @@ def sinergia_depuratore(riga) -> str:
     return "\n".join(out)
 
 
-def sezione_nicchie(riga) -> str:
-    """Sezione 2.3: usi di nicchia, con stima del fabbisogno dove i driver ci sono."""
-    attive = [c for c in DETTAGLIO_NICCHIE if c in riga.index and vero(riga[c])]
-    if not attive:
+def sezione_depuratore(riga) -> str:
+    """Il depuratore come sito di produzione (domanda del 2.5).
+
+    Stava fra gli usi di nicchia del 2.3, ma non e' un consumo: e' l'unico
+    impianto comunale che offre insieme acqua, un impiego per l'ossigeno
+    dell'elettrolisi e uno per il calore di scarto. Con la chiusura del 2.3 la
+    domanda e' passata al 2.5 e la sezione al percorso B, accanto alle aree.
+    """
+    if not vero(riga.get("T25_FLAG_DEPURATORI")):
         return ""
-
-    out = [testo_da_template("A23-nicchie_intro_it.md", {}, TESTO_NICCHIE_PREDEFINITO), ""]
-
-    speciali = numero(riga.get("T23_N_MEZZI_SPECIALI"))
-    convertibili = numero(riga.get("T23_MEZZI_FUEL_CELL"))
-    if speciali or convertibili:
-        frase = []
-        if speciali:
-            frase.append(f"Il censimento ha individuato {formatta_numero(speciali)} mezzi "
-                         "speciali sul territorio")
-        if convertibili:
-            frase.append(f"di cui {formatta_numero(convertibili)} tecnicamente convertibili "
-                         "a celle a combustibile" if speciali else
-                         f"Risultano {formatta_numero(convertibili)} mezzi convertibili a "
-                         "celle a combustibile")
-        out += [", ".join(frase) + ".", ""]
-
-    totale_kg = 0.0
-    stimate = []
-
-    for colonna in attive:
-        info = DETTAGLIO_NICCHIE[colonna]
-        out.append(f"#### {info['titolo']}")
-        out.append(info["testo"])
-
-        kg = None
-        driver = numero(riga.get(info["driver"])) if info["driver"] else None
-
-        if colonna == "T23_FLAG_TRENI":
-            km = numero(riga.get("T23_TRATTA_NON_ELETTRIFICATA_KM"))
-            corse = numero(riga.get("T23_CORSE_GIORNALIERE"))
-            if km and corse:
-                kg = km * corse * 2 * 365 * CONSUMO_TRENO_KG_KM
-                out.append("")
-                out.append(f"La tratta misura {formatta_numero(km)} km e ospita "
-                           f"{formatta_numero(corse)} corse al giorno: considerando il "
-                           "percorso di andata e ritorno, il servizio richiederebbe circa "
-                           f"**{circa(kg / 1000)} tonnellate di idrogeno all'anno**.")
-        elif driver is not None and info["kg"]:
-            kg = info["kg"](driver)
-            out.append("")
-            out.append(f"Il questionario riporta {formatta_numero(driver)} "
-                       f"{info['unita']}, che corrispondono a circa "
-                       f"**{circa(kg / 1000)} tonnellate di idrogeno all'anno**.")
-
-        if colonna == "T23_FLAG_DEPURATORI":
-            out.append(sinergia_depuratore(riga))
-
-        if kg:
-            totale_kg += kg
-            stimate.append((info["titolo"], kg))
-        out.append("")
-
-    if len(stimate) > 1:
-        out.append("#### Peso complessivo degli usi di nicchia")
-        out += ["| Impiego | Fabbisogno stimato |", "| --- | --- |"]
-        out += [f"| {t} | {circa(k / 1000)} t/anno |" for t, k in stimate]
-        out.append(f"| **Totale** | **{circa(totale_kg / 1000)} t/anno** |")
-        out.append("")
-
-    if totale_kg:
-        tot_ton = totale_kg / 1000
-        if tot_ton >= SOGLIA_MOBILITA_AUTONOMA_TON:
-            out.append(f"Con {circa(tot_ton)} t/anno gli usi di nicchia non sono "
-                       "più un contorno: da soli raggiungono la scala di una piccola "
-                       "stazione di rifornimento, e vanno considerati parte della domanda "
-                       "principale.")
-        else:
-            out.append(f"Il totale di {circa(tot_ton)} t/anno conferma la natura "
-                       "dimostrativa di questi impieghi. Il loro valore sta nell'essere "
-                       "primi passi realizzabili: costruiscono competenza tecnica e "
-                       "consenso, che sono i prerequisiti dei progetti più impegnativi.")
-        out.append("")
-        out.append("> Le stime sopra derivano dai driver fisici dichiarati nel questionario "
-                   f"con parametri di conversione dichiarati: {formatta_numero(RESA_FUEL_CELL_KWH_KG)} "
-                   "kWh elettrici per kg di idrogeno in cella a combustibile, "
-                   f"{formatta_numero(CONSUMO_TRENO_KG_KM)} kg/km per l'automotrice "
-                   "ferroviaria. Sono ordini di grandezza per orientare le priorità, non "
-                   "valori di progetto.")
-
-    return "\n".join(out).strip()
-
-
+    out = ["### Il depuratore come sito di produzione", "", TESTO_DEPURATORE, ""]
+    stima = sinergia_depuratore(riga)
+    if stima:
+        out.append(stima)
+    return "\n".join(out)
 
 TESTO_TERMICO_PREDEFINITO = """### Fabbisogno termico degli edifici pubblici (Tool 2.4)
 
@@ -2371,17 +2102,16 @@ passaggio. Cercare la domanda significa quindi separare i casi in cui l'idrogeno
 necessario da quelli in cui sarebbe solo una scelta insostenibile, e il criterio di
 separazione non è l'ambizione dell'amministrazione ma la termodinamica.
 
-L'analisi si articola in quattro rilevazioni, condotte con altrettanti strumenti
+L'analisi si articola in tre rilevazioni, condotte con altrettanti strumenti
 del Toolkit:
 
 | Strumento | Oggetto | Domanda a cui risponde |
 | --- | --- | --- |
 | Tool 2.1 | Industria Hard-to-Abate | quali processi non possono fare a meno della molecola |
 | Tool 2.2 | Flotte e mobilità | quali mezzi la batteria non riesce a servire |
-| Tool 2.3 | Usi di nicchia | dove contano continuità e tempi più del costo |
 | Tool 2.4 | Fabbisogno termico | se il riscaldamento pubblico rientri fra gli usi sensati |
 
-Le quattro rilevazioni restituiscono volumi molto diversi fra loro, e il confronto
+Le tre rilevazioni restituiscono volumi molto diversi fra loro, e il confronto
 finale fra le componenti dice quale sarà la vera natura del progetto comunale.
 """
 
@@ -2930,7 +2660,7 @@ def sezione_hrs(riga) -> str:
 
 
 def testo_percorso_a(riga) -> str:
-    """Percorso A: introduzione, quattro rilevazioni, bilancio finale.
+    """Percorso A: introduzione, tre rilevazioni, bilancio finale.
 
     La composizione sta in parti_percorso, cosi' il testo che finisce nel
     documento e il criterio con cui si decide se il capitolo ha dati restano
@@ -3236,7 +2966,7 @@ def parti_percorso(riga, codice: str):
         premessa = testo_da_template("A00-percorso_intro_it.md", {},
                                      TESTO_PERCORSO_A_INTRO)
         sezioni = [sezione_hta(riga), sezione_flotte(riga),
-                   sezione_nicchie(riga), sezione_termico(riga)]
+                   sezione_termico(riga)]
         ind = numero(riga.get("T21_FABBISOGNO_H2_TON_ANNO"))
         flotta, _, _ = flotta_da_contare(riga)
         valori = [v for v in (ind, flotta) if v is not None]
@@ -3247,7 +2977,8 @@ def parti_percorso(riga, codice: str):
     if codice == "B":
         premessa = testo_da_template("B00-percorso_intro_it.md", {},
                                      TESTO_PERCORSO_B_INTRO)
-        sezioni = [sezione_aree(riga), sezione_produzione(riga)]
+        sezioni = [sezione_aree(riga), sezione_depuratore(riga),
+                   sezione_produzione(riga)]
         return premessa, [s for s in sezioni if sostanziale(s)]
 
     if codice == "C":
@@ -3578,7 +3309,9 @@ def _sezione_impegno_comune(riga, livello, profilo) -> str:
     voci = []
     if mancanti:
         mezze = max(1, round(len(mancanti) * 0.8))
-        voci.append((f"Completare i {len(mancanti)} questionari mancanti", mezze,
+        quanti = ("il questionario mancante" if len(mancanti) == 1
+                  else f"i {len(mancanti)} questionari mancanti")
+        voci.append((f"Completare {quanti}", mezze,
                      "Ufficio tecnico",
                      "Consulente, oppure supporto tecnico regionale"))
     if not cap_nota:
@@ -3713,24 +3446,7 @@ def _sezione_attivita(riga, profilo) -> str:
                       "taglia della macchina da installare, qualunque essa sia.")
         attivita.append(("Edifici pubblici ad alto fabbisogno", testo))
 
-    # --- usi di nicchia: solo quelli non elettrificabili
-    nicchie_attive = [DETTAGLIO_NICCHIE[c]["titolo"] for c in DETTAGLIO_NICCHIE
-                      if c in riga.index and vero(riga[c])
-                      and c != "T23_FLAG_DEPURATORI"]
-    if nicchie_attive:
-        attivita.append((
-            "Impieghi dimostrativi",
-            "Il territorio presenta impieghi in cui l'idrogeno compete su requisiti che "
-            "l'elettrificazione non soddisfa — continuità di servizio, assenza di rete, "
-            "tempi di rifornimento, prestazioni a basse temperature: "
-            + ", ".join(n.lower() for n in nicchie_attive) + ". "
-            "Sono volumi contenuti ma ad alta visibilità, e servono a costruire le "
-            "competenze tecniche dell'ente prima di affrontare investimenti maggiori. "
-            "Anche qui la verifica va rifatta caso per caso al momento della "
-            "progettazione: le prestazioni delle batterie migliorano, e un impiego che "
-            "oggi non è elettrificabile potrebbe esserlo fra cinque anni."))
-
-    if vero(riga.get("T23_FLAG_DEPURATORI")):
+    if vero(riga.get("T25_FLAG_DEPURATORI")):
         attivita.append((
             "Depuratore come sito di produzione",
             "Il depuratore comunale può ospitare la produzione di idrogeno: è l'unico "
@@ -3751,7 +3467,7 @@ def _sezione_attivita(riga, profilo) -> str:
             "rapporto fra costo ed effetto dell'intero piano."))
 
     # --- aggregazione
-    if vero(riga.get("T12_FLAG_JOINT_PROCUREMENT")) or vero(riga.get("T23_FLAG_HYDROGEN_VALLEY")):
+    if vero(riga.get("T12_FLAG_JOINT_PROCUREMENT")) or vero(riga.get("T12_FLAG_HYDROGEN_VALLEY")):
         attivita.append((
             "Aggregazione della domanda",
             "Il Comune ha già dichiarato disponibilità ad appalti congiunti o partecipa a "
@@ -4379,7 +4095,7 @@ def _sezione_sostenibilita(riga) -> str:
                          "punta a 5.000 tonnellate annue di idrogeno rinnovabile su scala "
                          "transfrontaliera: il fabbisogno locale rilevato va letto come "
                          "quota di quel target, non come progetto isolato.")
-    if vero(riga.get("T23_FLAG_HYDROGEN_VALLEY")):
+    if vero(riga.get("T12_FLAG_HYDROGEN_VALLEY")):
         obiettivi.append("Sul territorio insiste già un progetto di Hydrogen Valley "
                          "finanziato: le azioni di questo piano vanno coordinate con "
                          "quelle, per evitare che due infrastrutture si contendano la "
@@ -4426,7 +4142,6 @@ def normalizza_uscita(testo: str) -> str:
 TESTIMONE_QUESTIONARIO = [
     ("2.1", "censimento delle utenze industriali", "T21_N_AZIENDE_IDONEE"),
     ("2.2", "flotte e costo totale di possesso", "T22_N_VEICOLI_ANALIZZATI"),
-    ("2.3", "usi di nicchia", "T23_FLAG_DEPURATORI"),
     ("2.4", "fabbisogno termico degli edifici", "T24_FABBISOGNO_TERMICO_KWH_ANNO"),
     ("2.5", "superfici e potenziale rinnovabile", "T25_AREE_IDONEE_MQ"),
     ("2.6", "dimensionamento della produzione", "T26_PRODUZIONE_H2_TON_ANNO"),
